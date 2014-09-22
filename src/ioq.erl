@@ -21,7 +21,7 @@
 -export([handle_config_change/5]).
 
 -record(state, {
-    concurrency=10,
+    concurrency,
     ratio,
     interactive=queue:new(),
     compaction=queue:new(),
@@ -50,7 +50,8 @@ init(_) ->
 
 read_config(State) ->
     Ratio = list_to_float(config:get("ioq", "ratio", "0.01")),
-    State#state{ratio=Ratio}.
+    Concurrency = list_to_integer(config:get("ioq", "concurrency", "10")),
+    State#state{concurrency=Concurrency, ratio=Ratio}.
 
 handle_call(#request{}=Request, From, State) ->
     {noreply, enqueue_request(Request#request{from=From}, State), 0}.
