@@ -13,6 +13,7 @@
 -module(ioq_sup).
 -behaviour(supervisor).
 -export([start_link/0, init/1]).
+-export([get_ioq2_servers/0]).
 
 %% Helper macro for declaring children of supervisor
 -define(CHILD(I, Type), {I, {I, start_link, []}, permanent, 5000, Type, [I]}).
@@ -21,4 +22,28 @@ start_link() ->
     supervisor:start_link({local, ?MODULE}, ?MODULE, []).
 
 init([]) ->
-    {ok, { {one_for_one, 5, 10}, [?CHILD(ioq, worker)]}}.
+    ok = ioq_config_listener:subscribe(),
+    IOQ2Children = ioq_server2_children(),
+    {ok, {
+        {one_for_one, 5, 10},
+        [
+            ?CHILD(ioq_server, worker),
+            ?CHILD(ioq_osq, worker)
+            | IOQ2Children
+        ]
+    }}.
+
+ioq_server2_children() ->
+    Bind = config:get_boolean("ioq2", "bind_to_schedulers", false),
+    ioq_server2_children(erlang:system_info(schedulers), Bind).
+
+ioq_server2_children(Count, Bind) ->
+    lists:map(fun(I) ->
+        Name = list_to_atom("ioq_server_" ++ integer_to_list(I)),
+        {Name, {ioq_server2, start_link, [Name, I, Bind]}, permanent, 5000, worker, [Name]}
+    end, lists:seq(1, Count)).
+
+get_ioq2_servers() ->
+    lists:map(fun(I) ->
+        list_to_atom("ioq_server_" ++ integer_to_list(I))
+    end, lists:seq(1, erlang:system_info(schedulers))).
