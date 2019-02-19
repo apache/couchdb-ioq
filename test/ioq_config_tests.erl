@@ -30,6 +30,111 @@
     }
 ]).
 
+config_update_test_() ->
+    {
+        "Test config updates",
+        {
+            foreach,
+            fun() -> test_util:start_applications([config, ioq]) end,
+            fun test_util:stop_applications/1,
+            [
+                fun t_restart_config_listener/1,
+                fun t_update_ioq_config/1,
+                fun t_update_ioq2_config/1,
+                fun t_update_ioq_config_on_listener_restart/1,
+                fun t_update_ioq2_config_on_listener_restart/1
+            ]
+        }
+}.
+
+t_restart_config_listener(_) ->
+    ?_test(begin
+        [{_, ConfigMonitor}] = ioq_sup:processes(config_listener_mon),
+        ?assert(is_process_alive(ConfigMonitor)),
+        test_util:stop_sync(ConfigMonitor),
+        ?assertNot(is_process_alive(ConfigMonitor)),
+        NewConfigMonitor = test_util:wait(fun() ->
+            case ioq_sup:processes(config_listener_mon) of
+                [] -> wait;
+                [{_, Pid}] -> Pid
+            end
+        end),
+        ?assert(is_process_alive(NewConfigMonitor))
+    end).
+
+t_update_ioq_config(_) ->
+    ?_test(begin
+        [{_, IoqServer}] = ioq_sup:processes(ioq),
+        gen_server:call(IoqServer, {set_concurrency, 10}),
+        ?assertEqual(10, gen_server:call(IoqServer, get_concurrency)),
+        ?assert(is_process_alive(IoqServer)),
+        config:set("ioq", "concurrency", "200", false),
+        ?assertNotEqual(timeout, test_util:wait(fun() ->
+            case gen_server:call(IoqServer, get_concurrency) of
+                200 -> 200;
+                _ -> wait
+            end
+        end)),
+        ?assert(is_process_alive(IoqServer))
+    end).
+
+t_update_ioq_config_on_listener_restart(_) ->
+    ?_test(begin
+        [{_, IoqServer}] = ioq_sup:processes(ioq),
+        DefaultConcurrency = gen_server:call(IoqServer, get_concurrency),
+        gen_server:call(IoqServer, {set_concurrency, 10}),
+        ?assertEqual(10, gen_server:call(IoqServer, get_concurrency)),
+        ?assert(is_process_alive(IoqServer)),
+
+        [{_, ConfigMonitor}] = ioq_sup:processes(config_listener_mon),
+        ?assert(is_process_alive(ConfigMonitor)),
+        test_util:stop_sync(ConfigMonitor),
+
+        ?assertNotEqual(timeout, test_util:wait(fun() ->
+            case gen_server:call(IoqServer, get_concurrency) of
+                DefaultConcurrency -> ok;
+                _ -> wait
+            end
+        end)),
+        ?assert(is_process_alive(IoqServer))
+    end).
+
+t_update_ioq2_config(_) ->
+    ?_test(begin
+        [{_, IoqServer} | _] = ioq_sup:processes(ioq2),
+        gen_server:call(IoqServer, {set_concurrency, 10}),
+        ?assertEqual(10, gen_server:call(IoqServer, get_concurrency)),
+        ?assert(is_process_alive(IoqServer)),
+        config:set("ioq2", "concurrency", "200", false),
+        ?assertNotEqual(timeout, test_util:wait(fun() ->
+            case gen_server:call(IoqServer, get_concurrency) of
+                200 -> 200;
+                _ -> wait
+            end
+        end)),
+        ?assert(is_process_alive(IoqServer))
+    end).
+
+t_update_ioq2_config_on_listener_restart(_) ->
+    ?_test(begin
+        [{_, IoqServer} | _] = ioq_sup:processes(ioq2),
+        DefaultConcurrency = gen_server:call(IoqServer, get_concurrency),
+        gen_server:call(IoqServer, {set_concurrency, 10}),
+        ?assertEqual(10, gen_server:call(IoqServer, get_concurrency)),
+        ?assert(is_process_alive(IoqServer)),
+
+        [{_, ConfigMonitor}] = ioq_sup:processes(config_listener_mon),
+        ?assert(is_process_alive(ConfigMonitor)),
+        test_util:stop_sync(ConfigMonitor),
+
+        ?assertNotEqual(timeout, test_util:wait(fun() ->
+            case gen_server:call(IoqServer, get_concurrency) of
+                DefaultConcurrency -> ok;
+                _ -> wait
+            end
+        end)),
+        ?assert(is_process_alive(IoqServer))
+    end).
 
 priorities_test_() ->
     {ok, ShardP} = ioq_config:build_shard_priorities(?SHARDS_CONFIG),
