@@ -112,8 +112,7 @@ call(Fd, Msg, Dimensions) ->
                 "ioq2", "dispatch_strategy", ?DISPATCH_SERVER_PER_SCHEDULER),
             Server = case DispatchStrategy of
                 ?DISPATCH_RANDOM ->
-                    maybe_seed(),
-                    SID = random:uniform(erlang:system_info(schedulers)),
+                    SID = rand:uniform(erlang:system_info(schedulers)),
                     ?SERVER_ID(SID);
                 ?DISPATCH_FD_HASH ->
                     NumSchedulers = erlang:system_info(schedulers),
@@ -601,19 +600,6 @@ prioritize_request(Req, State) ->
     end.
 
 
--spec maybe_seed() -> {integer(), integer(), integer()}.
-maybe_seed() ->
-    case get(random_seed) of
-        undefined ->
-            <<A:32, B:32, C:32>> = crypto:strong_rand_bytes(12),
-            Seed = {A, B, C},
-            random:seed(Seed),
-            Seed;
-        Seed ->
-            Seed
-    end.
-
-
 %% ioq_server2 Tests
 
 
@@ -954,7 +940,7 @@ setup_many(Count, RespDelay) ->
     ),
     FakeServer = fun(F) ->
         receive {'$gen_call', {Pid, Ref}, Call} ->
-            timer:sleep(random:uniform(RespDelay)),
+            timer:sleep(rand:uniform(RespDelay)),
             Pid ! {Ref, {reply, Call}}
         end,
         F(F)
@@ -1042,7 +1028,7 @@ wait_for_success(Count) when Count > 0 ->
 
 
 random_server(Servers) ->
-    lists:nth(random:uniform(length(Servers)), Servers).
+    lists:nth(rand:uniform(length(Servers)), Servers).
 
 
 test_io_error(#state{waiters=Waiters, reqs=Reqs}=State) ->
