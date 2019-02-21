@@ -59,7 +59,7 @@ handle_config_change("ioq", _Key, _Val, _Persist, St) ->
     {ok, St};
 handle_config_change("ioq2" ++ _, _Key, _Val, _Persist, St) ->
     lists:foreach(fun({_Id, Pid}) ->
-        gen_server:call(Pid, update_config)
+        gen_server:cast(Pid, update_config)
     end, processes(ioq2)),
     {ok, St};
 handle_config_change(_Sec, _Key, _Val, _Persist, St) ->
@@ -69,7 +69,7 @@ handle_config_terminate(_Server, _Reason, _State) ->
     gen_server:cast(ioq_server, update_config),
     spawn(fun() ->
         lists:foreach(fun({_Id, Pid}) ->
-            gen_server:call(Pid, update_config)
+            gen_server:cast(Pid, update_config)
         end, processes(ioq2))
     end),
     ok.
