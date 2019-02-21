@@ -67,7 +67,7 @@ call(Fd, Msg, Priority) ->
         msg = Msg,
         channel = Channel,
         class = Class,
-        t0 = now()
+        t0 = erlang:monotonic_time()
     },
     case config:get("ioq.bypass", atom_to_list(Class)) of
         "true" ->
@@ -145,7 +145,7 @@ handle_cast(_Msg, State) ->
 handle_info({Ref, Reply}, #state{reqs = Reqs} = State) ->
     case lists:keytake(Ref, #request.ref, Reqs) of
     {value, #request{from=From} = Req, Reqs2} ->
-        TResponse = erlang:now(),
+        TResponse = erlang:monotonic_time(),
         erlang:demonitor(Ref, [flush]),
         reply_to_all(From, Reply),
         update_histograms(ioq_histos, Req, TResponse),
@@ -419,8 +419,8 @@ submit_request(Request, State) ->
 
     % record some stats
     RW = rw(Call),
-    SubmitTime = now(),
-    Latency = timer:now_diff(SubmitTime, T0) / 1000,
+    SubmitTime = erlang:monotonic_time(),
+    Latency = erlang:convert_time_unit(SubmitTime - T0, native, millisecond),
     catch couch_stats:increment_counter([couchdb, io_queue, IOClass]),
     catch couch_stats:increment_counter([couchdb, io_queue, RW]),
     catch couch_stats:update_histogram([couchdb, io_queue, latency], Latency),
@@ -432,8 +432,10 @@ update_counter(Tab, Channel, IOClass, RW) ->
 
 update_histograms(Tab, Req, TResponse) ->
     #request{t0=T0, tsub=TSubmit, class=Class, channel=Channel, msg=Msg} = Req,
-    Delta1 = timer:now_diff(TSubmit, T0),
-    Delta2 = timer:now_diff(TResponse, TSubmit),
+    Delta1 = erlang:convert_time_unit(
+        TSubmit - T0, native, microsecond),
+    Delta2 = erlang:convert_time_unit(
+        TResponse - TSubmit, native, microsecond),
     Bin1 = timebin(Delta1),
     Bin2 = timebin(Delta2),
     Bin3 = timebin(Delta1+Delta2),
@@ -478,7 +480,7 @@ timebin(V) ->
 choose_next_request(Qs, Priorities) ->
     Norm = lists:sum(Priorities),
     QueuesAndPriorities = lists:zip(Qs, Priorities),
-    SortedQueues = sort_queues(QueuesAndPriorities, Norm, random:uniform()),
+    SortedQueues = sort_queues(QueuesAndPriorities, Norm, rand:uniform()),
     {Item, NewQueues} = choose_prioritized_request(SortedQueues),
     Map0 = lists:zip(SortedQueues, NewQueues),
     {Item, [element(2, lists:keyfind(Q, 1, Map0)) || Q <- Qs]}.

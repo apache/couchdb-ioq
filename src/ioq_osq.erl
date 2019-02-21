@@ -42,7 +42,8 @@ start_link() ->
 
 
 call(Pid, Msg, Priority) ->
-    Reply = gen_server:call(ioq_osq, {rlimit, nil, Priority, now()}, infinity),
+    Now = erlang:monotonic_time(),
+    Reply = gen_server:call(ioq_osq, {rlimit, nil, Priority, Now}, infinity),
     try
         gen_server:call(Pid, Msg, infinity)
     after
@@ -230,7 +231,9 @@ submit_request(Channel, {{Fd,Call,Pri,T0}, From}, #state{reqs=Reqs} = State) ->
 
 record_stats(Channel, Pri, T0) ->
     IOClass = if is_tuple(Pri) -> element(1, Pri); true -> Pri end,
-    Latency = timer:now_diff(now(),T0) / 1000,
+    Now = erlang:monotonic_time(),
+    Latency = erlang:convert_time_unit(
+        Now - T0, native, millisecond),
     catch couch_stats:increment_counter([couchdb, io_queue, IOClass]),
     catch couch_stats:increment_counter([couchdb, io_queue, osproc]),
     catch couch_stats:update_histogram([couchdb, io_queue, latency], Latency),
