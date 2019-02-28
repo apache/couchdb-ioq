@@ -11,6 +11,7 @@
 % the License.
 
 -module(ioq_kv_tests).
+-ifdef(WITH_PROPER).
 -behaviour(proper_statem).
 
 -include_lib("proper/include/proper.hrl").
@@ -147,3 +148,4 @@ almost_any() ->
         ?LAZY(loose_tuple(almost_any())),
         ?LAZY(list(almost_any()))
     ]).
+-endif.
