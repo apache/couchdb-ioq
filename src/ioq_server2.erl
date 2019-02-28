@@ -23,6 +23,8 @@
     code_change/3
 ]).
 -export([
+    start_link/0,
+    start_link/1,
     start_link/3,
     call/3,
     pcall/1,
@@ -108,21 +110,17 @@ call(Fd, Msg, Dimensions) ->
                 [couchdb, io_queue2, RW, bypassed_count]),
             gen_server:call(Fd, Msg, infinity);
         _ ->
-            DispatchStrategy = config:get(
-                "ioq2", "dispatch_strategy", ?DISPATCH_SERVER_PER_SCHEDULER),
-            Server = case DispatchStrategy of
-                ?DISPATCH_RANDOM ->
-                    SID = rand:uniform(erlang:system_info(schedulers)),
-                    ?SERVER_ID(SID);
-                ?DISPATCH_FD_HASH ->
-                    NumSchedulers = erlang:system_info(schedulers),
-                    SID = 1 + (erlang:phash2(Fd) rem NumSchedulers),
-                    ?SERVER_ID(SID);
-                ?DISPATCH_SINGLE_SERVER ->
-                    ?SERVER_ID(1);
-                _ ->
-                    SID = erlang:system_info(scheduler_id),
-                    ?SERVER_ID(SID)
+            Server = case ioq_opener:get_pid_for(Fd) of
+                undefined ->
+                    %%case ioq_opener:get_pid_for(Req#ioq_request.shard) of
+                    %%    undefined ->
+                    %%        ioq_server2;
+                    %%    IOQPid ->
+                    %%        IOQPid
+                    %%end;
+                    ioq_server2;
+                IOQPid ->
+                    IOQPid
             end,
             gen_server:call(Server, Req, infinity)
     end.
@@ -266,6 +264,18 @@ update_config() ->
     gen_server:call(?SERVER_ID(1), update_config, infinity).
 
 
+start_link() ->
+    start_link(?MODULE).
+
+
+start_link(?MODULE) ->
+    gen_server:start_link({local, ?MODULE}, ?MODULE, [{global, ?MODULE}], []);
+start_link({user, _Name}=User) ->
+    gen_server:start_link(?MODULE, [User], []);
+start_link({shard, _Name}=Shard) ->
+    gen_server:start_link(?MODULE, [Shard], []).
+
+
 start_link(Name, SID, Bind) ->
     Options = case Bind of
         true -> [{scheduler, SID}];
@@ -274,7 +284,7 @@ start_link(Name, SID, Bind) ->
     gen_server:start_link({local, Name}, ?MODULE, [Name, SID], Options).
 
 
-init([Name, SID]) ->
+init([{Type, Name}]) ->
     {ok, HQ} = hqueue:new(),
     {ok, Reqs} = khash:new(),
     {ok, Waiters} = khash:new(),
@@ -283,7 +293,7 @@ init([Name, SID]) ->
         reqs = Reqs,
         waiters = Waiters,
         server_name = Name,
-        scheduler_id = SID
+        scheduler_id = Type
     },
     {ok, update_config_int(State)}.
 
@@ -630,7 +640,7 @@ mock_server(Config) ->
     meck:expect(config, get_boolean, fun("ioq2", _, Default) ->
         Default
     end),
-    {ok, State} = ioq_server2:init([?SERVER_ID(1), 1]),
+    {ok, State} = ioq_server2:init([{global, ?SERVER_ID(1)}]),
     State.
 
 

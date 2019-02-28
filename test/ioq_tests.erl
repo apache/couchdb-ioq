@@ -40,7 +40,12 @@ instantiate({_, S}) ->
             check_call(S, make_ref(), priority(IOClass, Shard))
         end, shards())
     end, io_classes())},
-    ?_assertEqual(20, ioq:set_disk_concurrency(10)),
+    case ioq:ioq2_enabled() of
+        true ->
+            ?_assertEqual(1, ioq:set_disk_concurrency(10));
+        false ->
+            ?_assertEqual(20, ioq:set_disk_concurrency(10))
+    end,
     ?_assertError(badarg, ioq:set_disk_concurrency(0)),
     ?_assertError(badarg, ioq:set_disk_concurrency(-1)),
     ?_assertError(badarg, ioq:set_disk_concurrency(foo))].

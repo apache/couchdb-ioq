@@ -15,7 +15,12 @@
     get_disk_queues/0, get_osproc_queues/0, get_osproc_requests/0,
     get_disk_counters/0, get_disk_concurrency/0]).
 -export([
-    ioq2_enabled/0
+    ioq2_enabled/0,
+    fetch_pid_for/1,
+    fetch_pid_for/2,
+    fetch_pid_for/3,
+    get_pid_for/1,
+    set_pid_for/2
 ]).
 
 -define(APPS, [config, folsom, couch_stats, ioq]).
@@ -72,5 +77,20 @@ get_osproc_requests() ->
     gen_server:call(ioq_osq, get_requests).
 
 ioq2_enabled() ->
-    config:get_boolean("ioq2", "enabled", false).
+    config:get_boolean("ioq2", "enabled", true).
+
+fetch_pid_for(DbName) ->
+    ioq_opener:fetch_pid_for(DbName).
+
+fetch_pid_for(DbName, FdPid) ->
+    ioq_opener:fetch_pid_for(DbName, FdPid).
+
+fetch_pid_for(DbName, UserCtx, FdPid) ->
+    ioq_opener:fetch_pid_for(DbName, UserCtx, FdPid).
+
+get_pid_for(FdPid) ->
+    ioq_opener:get_pid_for(FdPid).
+
+set_pid_for(FdPid, IOQPid) ->
+    ioq_opener:set_pid_for(FdPid, IOQPid).
 
