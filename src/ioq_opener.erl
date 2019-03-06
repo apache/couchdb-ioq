@@ -12,7 +12,7 @@
 ]).
 -export([
     start_link/0,
-    %%fetch_pid_for/1,
+    fetch_pid_for/1,
     fetch_pid_for/2,
     fetch_pid_for/3,
     get_pid_for/1,
@@ -24,10 +24,14 @@
 
 
 -include_lib("couch/include/couch_db.hrl").
+-include_lib("ioq/include/ioq.hrl").
 
 
 -define(BY_USER, by_user).
 -define(BY_SHARD, by_shard).
+-define(BY_CLASS, by_class).
+-define(BY_FD, by_fd).
+-define(BY_DB, by_db).
 -define(DEFAULT_DISPATCH, ?BY_SHARD).
 -define(PDICT_MARKER, ioq_pid_for).
 
@@ -36,7 +40,7 @@
     idle = [] :: [{erlang:timestamp(), pid()}],
     pid_idx :: khash:khash(),
     monitors :: khash:khash(),
-    dispatch :: by_shard | by_user | undefined
+    dispatch :: ?BY_SHARD | ?BY_DB | ?BY_USER | ?BY_CLASS | ?BY_FD | undefined
  }).
 
 
@@ -44,6 +48,10 @@
 %% the associated couch_file pids
 %%fetch_pid_for(DbName) when is_binary(DbName) ->
 %%    fetch_pid_for(DbName, self()).
+
+
+fetch_pid_for(#ioq_request{}=Req) ->
+    gen_server:call(?MODULE, {fetch, Req}, infinity).
 
 
 %% TODO: cleanup the overloaded arity once experiments concluded
@@ -111,8 +119,11 @@ init([]) ->
     {ok, Monitors} = khash:new(),
     Dispatch = case config:get("ioq.opener", "dispatch", undefined) of
         "by_shard" -> ?BY_SHARD;
-        "by_user" -> ?BY_USER;
-        _ -> ?DEFAULT_DISPATCH
+        "by_db"    -> ?BY_DB;
+        "by_user"  -> ?BY_USER;
+        "by_class" -> ?BY_CLASS;
+        "by_fd"    -> ?BY_FD;
+        _          -> ?DEFAULT_DISPATCH
     end,
     St = #st{
         pid_idx = PidIdx,
@@ -122,6 +133,30 @@ init([]) ->
     {ok, St}.
 
 
+handle_call({fetch, #ioq_request{}=Req}, _From, #st{dispatch=Dispatch}=St) ->
+    Key = case Dispatch of
+        ?BY_SHARD ->
+            Req#ioq_request.shard;
+        ?BY_DB ->
+            Req#ioq_request.db;
+        ?BY_USER ->
+            Req#ioq_request.user;
+        ?BY_CLASS ->
+            Req#ioq_request.class;
+        ?BY_FD ->
+            {fd, Req#ioq_request.fd}
+    end,
+    IOQPid = case khash:get(St#st.pid_idx, Key, not_found) of
+        not_found ->
+            {ok, Pid} = ioq_server2:start_link({Dispatch, Key}),
+            khash:put(St#st.pid_idx, Key, Pid),
+            khash:put(St#st.pid_idx, Pid, Key),
+            Pid;
+        Pid ->
+            Pid
+    end,
+    ok = add_monitor(St#st.monitors, Req#ioq_request.fd, IOQPid),
+    {reply, IOQPid, St};
 handle_call({fetch, _DbName, UserCtx, FdPid}, From, #st{dispatch=?BY_USER}=St) ->
     Caller = case FdPid of
         undefined -> From;
@@ -134,7 +169,7 @@ handle_call({fetch, _DbName, UserCtx, FdPid}, From, #st{dispatch=?BY_USER}=St) -
     end,
     IOQPid = case khash:get(St#st.pid_idx, Name, not_found) of
         not_found ->
-            {ok, Pid} = ioq_server2:start_link({user, Name}),
+            {ok, Pid} = ioq_server2:start_link({?BY_USER, Name}),
             khash:put(St#st.pid_idx, Name, Pid),
             khash:put(St#st.pid_idx, Pid, Name),
             Pid;
@@ -151,7 +186,7 @@ handle_call({fetch, DbName, _UserCtx, FdPid}, From, #st{dispatch=?BY_SHARD}=St) 
     %% TODO: DbName = drop_compact_ext(DbName0),
     IOQPid = case khash:get(St#st.pid_idx, DbName, not_found) of
         not_found ->
-            {ok, Pid} = ioq_server2:start_link({shard, DbName}),
+            {ok, Pid} = ioq_server2:start_link({?BY_SHARD, DbName}),
             khash:put(St#st.pid_idx, DbName, Pid),
             khash:put(St#st.pid_idx, Pid, DbName),
             Pid;
@@ -210,7 +245,8 @@ add_monitor(Mons, FdPid, IOQPid) ->
         not_found ->
             Ref0 = erlang:monitor(process, FdPid),
             khash:put(Mons, Ref0, PidKey),
-            khash:put(Mons, PidKey, Ref0);
+            khash:put(Mons, PidKey, Ref0),
+            khash:put(Mons, FdPid, Ref0);
         Ref0 ->
             Ref0
     end,
@@ -233,12 +269,13 @@ drop_monitor(Mons, Ref) when is_reference(Ref) ->
         not_found ->
             %% TODO: shouldn't happen
             throw(unexpected);
-        {_FdPid, IOQPid}=PidKey ->
+        {FdPid, IOQPid}=PidKey ->
             case khash:get(Mons, IOQPid, not_found) of
                 not_found ->
                     %% TODO: shouldn't happen
                     throw(unexpected);
                 Refs ->
+                    khash:del(Mons, FdPid),
                     khash:del(Mons, Ref),
                     khash:del(Mons, PidKey),
                     case lists:delete(Ref, Refs) of

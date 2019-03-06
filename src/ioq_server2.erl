@@ -112,13 +112,14 @@ call(Fd, Msg, Dimensions) when Dimensions =/= undefined ->
         _ ->
             Server = case ioq_opener:get_pid_for(Fd) of
                 undefined ->
-                    %%case ioq_opener:get_pid_for(Req#ioq_request.shard) of
-                    %%    undefined ->
-                    %%        ioq_server2;
-                    %%    IOQPid ->
-                    %%        IOQPid
-                    %%end;
-                    ioq_server2;
+                    IOQPid = case ioq_opener:fetch_pid_for(Req) of
+                        undefined ->
+                            ioq_server2;
+                        IOQPid0 ->
+                            IOQPid0
+                    end,
+                    ioq_opener:set_pid_for(Fd, IOQPid),
+                    IOQPid;
                 IOQPid ->
                     IOQPid
             end,
@@ -270,9 +271,9 @@ start_link() ->
 
 start_link(?MODULE) ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [{global, ?MODULE}], []);
-start_link({user, _Name}=User) ->
+start_link({by_user, _Name}=User) ->
     gen_server:start_link(?MODULE, [User], []);
-start_link({shard, _Name}=Shard) ->
+start_link({by_shard, _Name}=Shard) ->
     gen_server:start_link(?MODULE, [Shard], []).
 
 
@@ -803,11 +804,6 @@ test_simple_dedupe(St0) ->
         from = FromA,
         key = {Fd, Pos}
     },
-    _Request1B = Request0#ioq_request{
-        init_priority = Priority,
-        from = FromA,
-        key = {Fd, Pos}
-    },
     {noreply, St2, 0} = handle_call(Request0, FromA, St1),
     {noreply, St3, 0} = handle_call(Request0, FromB, St2),
     {reply, RespState, _St4, 0} = handle_call(get_state, FromA, St3),
@@ -877,7 +873,7 @@ test_auto_scale(#state{queue=HQ}=St0) ->
     {_, #ioq_request{init_priority=PriorityA2}} = hqueue:extract_max(HQ),
     Tests0 = [?_assertEqual(PriorityA, PriorityA2)],
     {_St, Tests} = lists:foldl(
-        fun(_N, {#state{iterations=I, resize_limit=RL}=StN0, TestsN}) ->
+        fun(_N, {#state{iterations=I, resize_limit=_RL}=StN0, TestsN}) ->
             ReqN = BaseReq#ioq_request{ref=make_ref()},
             ExpectedPriority = case I == 1 of
                 false -> PriorityA;
@@ -968,7 +964,7 @@ cleanup(Servers) ->
 
 
 instantiate(S) ->
-    Old = ?DEFAULT_CONCURRENCY * length(ioq_sup:get_ioq2_servers()),
+    Old = ?DEFAULT_CONCURRENCY * (1 + length(shards())),
     [{inparallel, lists:map(fun(IOClass) ->
         lists:map(fun(Shard) ->
             check_call(S, make_ref(), priority(IOClass, Shard))

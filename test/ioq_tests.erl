@@ -35,14 +35,16 @@ cleanup({Apps, Server}) ->
     exit(Server, kill).
 
 instantiate({_, S}) ->
+    Shards = shards(),
     [{inparallel, lists:map(fun(IOClass) ->
         lists:map(fun(Shard) ->
             check_call(S, make_ref(), priority(IOClass, Shard))
-        end, shards())
+        end, Shards)
     end, io_classes())},
     case ioq:ioq2_enabled() of
         true ->
-            ?_assertEqual(1, ioq:set_disk_concurrency(10));
+            %% TODO: don't assume IOQ2 concurrency is 1
+            ?_assertEqual(1 + length(Shards), ioq:set_disk_concurrency(10));
         false ->
             ?_assertEqual(20, ioq:set_disk_concurrency(10))
     end,
