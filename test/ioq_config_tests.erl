@@ -35,7 +35,7 @@ config_update_test_() ->
         "Test config updates",
         {
             foreach,
-            fun() -> test_util:start_applications([config, ioq]) end,
+            fun() -> test_util:start_applications([config, couch_log, ioq]) end,
             fun test_util:stop_applications/1,
             [
                 fun t_restart_config_listener/1,
