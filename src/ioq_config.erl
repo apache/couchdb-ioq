@@ -135,8 +135,19 @@ set_user_config(User, Value, Reason) ->
     ok = set_config(?IOQ2_USERS_CONFIG, User, Value, Reason).
 
 
-is_valid_class(Class) ->
-    lists:member(Class, ioq_classes()).
+is_valid_class(Class) when is_atom(Class) ->
+    case lists:member(Class, ioq_classes()) of
+        true ->
+            true;
+        false ->
+            SClass = atom_to_list(Class),
+            case config:get(?IOQ2_CLASSES_CONFIG, SClass, undefined) of
+                undefined ->
+                    false;
+                _ ->
+                    true
+            end
+    end.
 
 
 check_float_value(Value) when is_float(Value) ->
