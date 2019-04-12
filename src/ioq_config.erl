@@ -54,14 +54,6 @@
 ]).
 
 
--define(SHARD_CLASS_SEPARATOR, "||").
--define(IOQ2_CONFIG, "ioq2").
--define(IOQ2_BYPASS_CONFIG, "ioq2.bypass").
--define(IOQ2_SHARDS_CONFIG, "ioq2.shards").
--define(IOQ2_USERS_CONFIG, "ioq2.users").
--define(IOQ2_CLASSES_CONFIG, "ioq2.classes").
-
-
 ioq_classes() ->
     [Class || {Class, _Priority} <- ?DEFAULT_CLASS_PRIORITIES].
 

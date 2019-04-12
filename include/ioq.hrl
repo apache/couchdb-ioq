@@ -19,6 +19,15 @@
 -define(DISPATCH_SINGLE_SERVER, "single_server").
 -define(DISPATCH_SERVER_PER_SCHEDULER, "server_per_scheduler").
 
+%% Config Categories
+-define(SHARD_CLASS_SEPARATOR, "||").
+-define(IOQ2_CONFIG, "ioq2").
+-define(IOQ2_BYPASS_CONFIG, "ioq2.bypass").
+-define(IOQ2_SHARDS_CONFIG, "ioq2.shards").
+-define(IOQ2_USERS_CONFIG, "ioq2.users").
+-define(IOQ2_CLASSES_CONFIG, "ioq2.classes").
+
+
 -define(DEFAULT_CLASS_PRIORITIES, [
     {customer, 1.0},
     {internal_repl, 0.001},
