@@ -54,14 +54,6 @@
 ]).
 
 
--define(SHARD_CLASS_SEPARATOR, "||").
--define(IOQ2_CONFIG, "ioq2").
--define(IOQ2_BYPASS_CONFIG, "ioq2.bypass").
--define(IOQ2_SHARDS_CONFIG, "ioq2.shards").
--define(IOQ2_USERS_CONFIG, "ioq2.users").
--define(IOQ2_CLASSES_CONFIG, "ioq2.classes").
-
-
 ioq_classes() ->
     [Class || {Class, _Priority} <- ?DEFAULT_CLASS_PRIORITIES].
 
@@ -143,8 +135,19 @@ set_user_config(User, Value, Reason) ->
     ok = set_config(?IOQ2_USERS_CONFIG, User, Value, Reason).
 
 
-is_valid_class(Class) ->
-    lists:member(Class, ioq_classes()).
+is_valid_class(Class) when is_atom(Class) ->
+    case lists:member(Class, ioq_classes()) of
+        true ->
+            true;
+        false ->
+            SClass = atom_to_list(Class),
+            case config:get(?IOQ2_CLASSES_CONFIG, SClass, undefined) of
+                undefined ->
+                    false;
+                _ ->
+                    true
+            end
+    end.
 
 
 check_float_value(Value) when is_float(Value) ->

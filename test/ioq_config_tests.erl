@@ -260,3 +260,34 @@ check_bypass_configs(_) ->
     ok = ioq_config:set_bypass(interactive, true, "Bypassing interactive"),
     Value = config:get_boolean("ioq2.bypass", "interactive", false),
     ?_assertEqual(true, Value).
+
+
+valid_classes_test_() ->
+    {
+        "Test ioq_config is_valid_class logic",
+        {
+            foreach,
+            fun() -> test_util:start_applications([config, couch_log]) end,
+            fun(_) -> test_util:stop_applications([config, couch_log]) end,
+            [
+                fun check_default_classes/1,
+                fun check_undeclared_class/1,
+                fun check_declared_class/1
+            ]
+        }
+    }.
+
+
+check_default_classes(_) ->
+    Classes = [C || {C, _P} <- ?DEFAULT_CLASS_PRIORITIES],
+    [?_assert(ioq_config:is_valid_class(C)) || C <- Classes].
+
+
+check_undeclared_class(_) ->
+    ?_assert(not ioq_config:is_valid_class(search)).
+
+
+check_declared_class(_) ->
+    config:set(?IOQ2_CLASSES_CONFIG, "search", "1.0", false),
+    ?_assert(ioq_config:is_valid_class(search)).
+
