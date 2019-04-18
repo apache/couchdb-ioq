@@ -611,6 +611,16 @@ You can see the proper names for all registered IOQ classes with the following:
 ```
 
 
+### Dynamic IOQ classes
+
+To support 3rd party IO channels for things like search/geo/cache/etc, you can
+manually set a config priority for the desired class, and then it will be
+picked up by `ioq_config:is_valid_class/1`. Because the `ioq_config:set_*`
+setters depend on `is_valid_class`, you must manually define the priority
+initially, for example with `config:set("ioq.classes", "search", "1.0").`.
+Afterwards, you'll be able to utilize the setters as expected.
+
+
 ## ioq_server2:get_state
 
 You can see a human readable representation of the IOQ2 server state with the
