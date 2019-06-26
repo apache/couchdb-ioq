@@ -474,6 +474,8 @@ upsert(Tab, Key, Incr) ->
         ets:insert(Tab, {Key, Incr})
     end.
 
+timebin(0) ->
+    0;
 timebin(V) ->
     trunc(10*math:log10(V)).
 
