@@ -77,7 +77,8 @@ run(Opts) ->
     ets:new(?WORKERS, [public, set, named_table]),
     create_files(Opts),
     %run_static(Opts),
-    run_dynamic(Opts).
+    %run_dynamic(Opts).
+    run_static(Opts).
 
 
 run_static(Opts) ->
@@ -328,7 +329,11 @@ gen_priority_and_message(UserBin, ClassPerc, OpPerc) ->
         view ->
             case rand:uniform() < 0.6 of
                 true ->
-                    {pread_iolist, rand:uniform()};
+                    Pos = case rand:uniform() of
+                        V when V < 0.05 -> 0.0;
+                        V -> V
+                    end,
+                    {pread_iolist, Pos};
                 false ->
                     {append_binary, rand:uniform()}
             end

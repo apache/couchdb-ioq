@@ -319,15 +319,21 @@ append(A, B) when is_list(B) ->
 append(A, B) ->
     [A, B].
 
-enqueue_channel(#request{channel=Account} = Req, #state{channels=Q} = State) ->
+enqueue_channel(#request{name = Account} = Req, #state{channels = Q} = State) ->
     DD = State#state.dedupe,
-    % ioq_q's are update-in-place
-    case find_channel(Account, State) of
-        {new, Channel} ->
-            update_channel(Channel, Req, DD),
-            ioq_q:in(Channel, Q);
-        Channel ->
-            update_channel(Channel, Req, DD)
+    ShouldProcess = should_process_request(Req),
+    case should_process_request(Req) of
+        true ->
+            % ioq_q's are update-in-place
+            case find_channel(Account, State) of
+                {new, Channel} ->
+                    update_channel(Channel, Req, DD),
+                    ioq_q:in(Channel, Q);
+                Channel ->
+                    update_channel(Channel, Req, DD)
+            end;
+        false ->
+            ok
     end,
     State.
 
@@ -391,8 +397,26 @@ make_next_request(State) ->
         false ->
             NewCh2 = ioq_q:in(Channel#channel{qI=QI2, qU=QU2, qV=QV2}, NewCh)
         end,
-        submit_request(Item2, State#state{channels=NewCh2, qC=NewQC,
-            qR=NewQR, qL=NewQL});
+        NewState = State#state{
+            channels = NewCh2,
+            qC = NewQC,
+            qR = NewQR,
+            qL = NewQL
+        },
+        ShouldProcess = should_process_request(Item2),
+        case ShouldProcess of
+            true ->
+                submit_request(Item2, NewState);
+            false ->
+                % We're recursing here because of the logic
+                % in maybe_submit_request where returning
+                % NewState may actually end up being equal
+                % to the old state due to ioq_q instances
+                % now being references. This would be a bug
+                % that prevented from using all of the
+                % available concurrent request slots.
+                make_next_request(NewState)
+        end;
     _ ->
         % Item is a background (compaction or internal replication) task
         submit_request(Item, State#state{channels=NewCh, qC=NewQC, qR=NewQR,
@@ -422,6 +446,35 @@ submit_request(Request, State) ->
     catch couch_stats:update_histogram([couchdb, io_queue, latency], Latency),
     update_counter(Counters, Channel, IOClass, RW),
     State#state{reqs = [Request#request{tsub=SubmitTime, ref=Ref} | Reqs]}.
+
+
+should_process_request(#request{class = interactive} = Request) ->
+    #request{
+        from = Froms,
+        t0 = T0
+    } = Req,
+
+    % Calculate our timeout
+    RawDiff = erlang:monotonic_time() - T0,
+    MilliDiff = erlang:convert_time_unit(Diff, native, millisecond),
+    TimedOut = MilliDiff > ?INITIAL_TIMEOUT,
+
+    if not TimedOut -> true; true ->
+        % Gather the list of pids
+        ClientPids = case Froms of
+            {ClientPid, _Tag} ->
+                [ClientPid];
+            Froms when is_list(Froms) ->
+                [ClientPid || {ClientPid | _From} <- Froms]
+        end,
+
+        AnyAlive = lists:any(fun erlang:is_process_alive/1, ClientPids),
+        if AnyAlive -> true; true ->
+            false
+        end
+    end;
+should_process_request(_Request) ->
+    true.
 
 update_counter(Tab, Channel, IOClass, RW) ->
     upsert(Tab, {Channel, IOClass, RW}, 1).
