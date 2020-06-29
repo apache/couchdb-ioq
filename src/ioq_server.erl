@@ -259,7 +259,6 @@ find_channel(Account, #state{} = State) ->
     } = State,
     case khash:lookup(ChannelsByName, Account) of
         {value, Channel} ->
-            couch_log:error("XKCD: found channel", []),
             Channel;
         not_found ->
             Channel = #channel{name = Account},
@@ -275,8 +274,25 @@ update_channel(Ch, Req, Dedupe) ->
     % everything else is interactive IO class
     Ch#channel{qI = update_queue(Req, Ch#channel.qI, Dedupe)}.
 
+update_queue(#request{from=From, fd=Fd, msg={pread_iolist, Pos}}=R, Q, true) ->
+    Key = {dedupe, Fd, Pos},
+    Req = case ioq_q:lookup(Q, Key) of
+        {value, #request{from = PrevFrom} = PrevReq} ->
+            PrevReq#request{
+                from = append(From, PrevFrom)
+            };
+        not_found ->
+            ioq_q:in(Key, Q),
+            R
+    end,
+    ioq_q:put(Q, Key, Req);
 update_queue(Req, Q, _Dedupe) ->
     ioq_q:in(Req, Q).
+
+append(A, B) when is_list(B) ->
+    [A|B];
+append(A, B) ->
+    [A, B].
 
 enqueue_channel(#request{channel=Account} = Req, #state{channels=Q} = State) ->
     DD = State#state.dedupe,
@@ -408,6 +424,10 @@ choose_prioritized_request([Q | Rest], Empties) ->
     case ioq_q:out(Q) of
     {empty, _} ->
         choose_prioritized_request(Rest, [Q | Empties]);
+    {{value, {dedupe, _Fd, _Pos} = Key}, NewQ} ->
+        {value, Req} = ioq_q:lookup(Q, Key),
+        ioq_q:del(Q, Key),
+        {Req, lists:reverse([NewQ | Empties], Rest)};
     {{value, Item}, NewQ} ->
         {Item, lists:reverse([NewQ | Empties], Rest)}
     end.

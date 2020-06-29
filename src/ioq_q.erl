@@ -20,26 +20,31 @@
     in/2,
     out/1,
 
+    lookup/2,
+    put/3,
+    del/2,
+
     to_list/1
 ]).
 
 
 new() ->
     {ok, Q} = khash:new(),
+    {ok, H} = khash:new(),
     ok = khash:put(Q, next_id, 0),
     ok = khash:put(Q, oldest_id, undefined),
-    Q.
+    {Q, H}.
 
 
-len(Q) ->
+len({Q, _}) ->
     khash:size(Q) - 2. % two metadata keys
 
 
-is_empty(Q) ->
-    len(Q) == 0.
+is_empty({Q, H}) ->
+    len({Q, H}) == 0.
 
 
-in(Item, Q) ->
+in(Item, {Q, H}) ->
     NextId = khash:get(Q, next_id),
     ok = khash:put(Q, NextId, Item),
     ok = khash:put(Q, next_id, NextId + 1),
@@ -49,14 +54,14 @@ in(Item, Q) ->
         _ ->
             ok
     end,
-    Q.
+    {Q, H}.
 
 
-out(Q) ->
+out({Q, H}) ->
     NextId = khash:get(Q, next_id),
     case khash:get(Q, oldest_id) of
         undefined ->
-            {empty, Q};
+            {empty, {Q, H}};
         OldestId ->
             {value, Item} = khash:lookup(Q, OldestId),
             khash:del(Q, OldestId),
@@ -67,11 +72,25 @@ out(Q) ->
                 false ->
                     khash:put(Q, oldest_id, OldestId + 1)
             end,
-            {{value, Item}, Q}
+            {{value, Item}, {Q, H}}
     end.
 
 
-to_list(Q) ->
+lookup({_Q, H}, Key) ->
+    khash:lookup(H, Key).
+
+
+put({Q, H}, Key, Value) ->
+    khash:put(H, Key, Value),
+    {Q, H}.
+
+
+del({Q, H}, Key) ->
+    khash:del(H, Key),
+    {Q, H}.
+
+
+to_list({Q, _H}) ->
     Entries = khash:to_list(Q),
     NoMeta = [{K, V} || {K, V} <- Entries, is_integer(K)],
     Sorted = lists:sort(NoMeta),
