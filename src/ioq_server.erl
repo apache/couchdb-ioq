@@ -52,6 +52,9 @@
     tsub
 }).
 
+-define(INITIAL_TIMEOUT, 5000).
+
+
 start_link() ->
     Opts = [{spawn_opt, [{fullsweep_after, 10}]}],
     gen_server:start_link({local, ?MODULE}, ?MODULE, [], Opts).
@@ -71,6 +74,28 @@ call(Fd, Msg, Priority) ->
             catch couch_stats:increment_counter([couchdb, io_queue_bypassed, Class]),
             catch couch_stats:increment_counter([couchdb, io_queue_bypassed, RW]),
             gen_server:call(Fd, Msg, infinity);
+        _ when Class == interactive ->
+            % For interactive requests we use a timeout on
+            % the first request to determine if ioq_server
+            % is overloaded.
+            Timeout = case get('$ioq_called') of
+                true -> infinity;
+                false -> ?INITIAL_TIMEOUT
+            end,
+            try
+                gen_server:call(?MODULE, Request, Timeout)
+            catch exit:{timeout, {gen_server, call, _Args}} ->
+                case get(rexi_from) of
+                    undefined ->
+                        exit({io_saturated, node()});
+                    _ ->
+                        % Done to silence error logging by rexi_server
+                        rexi:reply({rexi_EXIT, {io_saturated, node()}}),
+                        exit(normal)
+                end;
+            after
+                put('$ioq_called', true)
+            end;
         _ ->
             gen_server:call(?MODULE, Request, infinity)
     end.
