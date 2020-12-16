@@ -94,6 +94,7 @@ init([]) ->
         histos = ets:new(ioq_histos, [named_table, ordered_set])
     },
     erlang:send_after(get_interval(), self(), dump_table),
+    process_flag(trap_exit, true),
     {ok, update_config(State)}.
 
 handle_call({set_priority, Pri}, _From, State) ->
@@ -146,7 +147,7 @@ handle_info({Ref, Reply}, #state{reqs = Reqs} = State) ->
     case lists:keytake(Ref, #request.ref, Reqs) of
     {value, #request{from=From} = Req, Reqs2} ->
         TResponse = erlang:monotonic_time(),
-        erlang:demonitor(Ref, [flush]),
+        demonitor_(Ref, Req#request.fd),
         reply_to_all(From, Reply),
         update_histograms(ioq_histos, Req, TResponse),
         {noreply, State#state{reqs = Reqs2}, 0};
@@ -162,6 +163,12 @@ handle_info({'DOWN', Ref, _, _, Reason}, #state{reqs = Reqs} = State) ->
     false ->
         {noreply, State, 0}
     end;
+
+handle_info({'EXIT', Pid, Reason}, #state{reqs = Reqs} = State) ->
+    {L1, L2} = lists:splitwith(fun(R) -> Pid == R#request.fd end, Reqs),
+    lists:foreach(
+        fun(R) -> reply_to_all(R#request.from, {'EXIT', Reason}) end, L1),
+    {noreply, State#state{reqs = L2}, 0};
 
 handle_info(dump_table, State) ->
     erlang:send_after(get_interval(), self(), dump_table),
@@ -414,7 +421,7 @@ submit_request(Request, State) ->
     #state{reqs = Reqs, counters = Counters} = State,
 
     % make the request
-    Ref = erlang:monitor(process, Fd),
+    Ref = monitor_(Fd),
     Fd ! {'$gen_call', {self(), Ref}, Call},
 
     % record some stats
@@ -597,6 +604,50 @@ rw({append_bin, _}) ->
     writes;
 rw(_) ->
     unknown.
+
+
+monitor_(Pid) when is_pid(Pid) ->
+    case is_hidden(Pid) of
+        true ->
+            link(Pid),
+            make_ref();
+        false ->
+            erlang:monitor(process, Pid)
+    end;
+
+monitor_({Name, Node}) when is_atom(Name), is_atom(Node) ->
+    case is_hidden(Node) of
+        true ->
+            make_ref();
+        false ->
+            erlang:monitor(process, {Name, Node})
+    end.
+
+
+demonitor_(Ref, Pid) when is_reference(Ref), is_pid(Pid) ->
+    case is_hidden(Pid) of
+        true ->
+            unlink(Pid);
+        false ->
+            erlang:demonitor(Ref, [flush])
+    end;
+
+demonitor_(Ref, {Name, Node})
+  when is_reference(Ref), is_atom(Name), is_atom(Node) ->
+    case is_hidden(Node) of
+        true ->
+            ok;
+        false ->
+            erlang:demonitor(Ref, [flush])
+    end.
+
+
+is_hidden(Pid) when is_pid(Pid) ->
+    is_hidden(node(Pid));
+
+is_hidden(Node) when is_atom(Node) ->
+    lists:member(Node, nodes(hidden)).
+
 
 -ifdef(TEST).
 -include_lib("eunit/include/eunit.hrl").
