@@ -94,7 +94,8 @@
 
 
 -spec call(pid(), term(), io_dimensions()) -> term().
-call(Fd, Msg, Dimensions) when Dimensions =/= undefined ->
+%%call(Fd, Msg, Dimensions) when Dimensions =/= undefined ->
+call(Fd, Msg, Dimensions) ->
     Req0 = #ioq_request{
         fd = Fd,
         msg = Msg,
