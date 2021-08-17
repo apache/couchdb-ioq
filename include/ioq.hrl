@@ -61,6 +61,13 @@
 }).
 
 
+-record(ioq_file, {
+    fd,
+    ioq,
+    tab
+}).
+
+
 -type io_priority() :: db_compact
     | db_update
     | interactive
