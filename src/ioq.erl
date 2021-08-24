@@ -22,6 +22,13 @@
     get_pid_for/1,
     set_pid_for/2
 ]).
+-export([
+    fd_pid/1,
+    ioq_pid/1,
+    cache/1
+]).
+
+-include_lib("ioq/include/ioq.hrl").
 
 -define(APPS, [config, folsom, couch_stats, ioq]).
 
@@ -93,4 +100,13 @@ get_pid_for(FdPid) ->
 
 set_pid_for(FdPid, IOQPid) ->
     ioq_opener:set_pid_for(FdPid, IOQPid).
+
+fd_pid(#ioq_file{fd=Fd}) ->
+    Fd.
+
+ioq_pid(#ioq_file{ioq=IOQ}) ->
+    IOQ.
+
+cache(#ioq_file{tab=Tab}) ->
+    Tab.
 
