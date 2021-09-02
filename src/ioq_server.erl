@@ -74,7 +74,7 @@ call(Fd, Msg, Priority) ->
             RW = rw(Msg),
             catch couch_stats:increment_counter([couchdb, io_queue_bypassed, Class]),
             catch couch_stats:increment_counter([couchdb, io_queue_bypassed, RW]),
-            gen_server:call(Fd, Msg, infinity);
+            gen_server:call(ioq:fd_pid(Fd), Msg, infinity);
         _ ->
             gen_server:call(?MODULE, Request, infinity)
     end.
@@ -406,12 +406,13 @@ make_next_request(State) ->
 submit_request(Request, State) ->
     #request{
         channel = Channel,
-        fd = Fd,
+        fd = IOF,
         msg = Call,
         t0 = T0,
         class = IOClass
     } = Request,
     #state{reqs = Reqs, counters = Counters} = State,
+    Fd = ioq:fd_pid(IOF),
 
     % make the request
     Ref = erlang:monitor(process, Fd),
