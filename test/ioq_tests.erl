@@ -14,6 +14,7 @@
 -compile(export_all).
 
 -include_lib("eunit/include/eunit.hrl").
+-include_lib("ioq/include/ioq.hrl").
 
 all_test_() ->
     {setup, fun setup/0, fun cleanup/1, fun instantiate/1}.
@@ -28,11 +29,11 @@ setup() ->
         end,
         F(F)
     end,
-    {Apps, spawn(fun() -> FakeServer(FakeServer) end)}.
+    {Apps, #ioq_file{fd=spawn(fun() -> FakeServer(FakeServer) end)}}.
 
 cleanup({Apps, Server}) ->
     test_util:stop_applications(Apps),
-    exit(Server, kill).
+    exit(ioq:fd_pid(Server), kill).
 
 instantiate({_, S}) ->
     Shards = shards(),
@@ -44,7 +45,7 @@ instantiate({_, S}) ->
     case ioq:ioq2_enabled() of
         true ->
             %% TODO: don't assume IOQ2 concurrency is 1
-            ?_assertEqual(1 + length(Shards), ioq:set_disk_concurrency(10));
+            ?_assertEqual(1, ioq:set_disk_concurrency(10));
         false ->
             ?_assertEqual(20, ioq:set_disk_concurrency(10))
     end,

@@ -44,9 +44,10 @@ get_ioq2_servers_new() ->
     [ioq_server2 | ioq_opener:get_ioq_pids()].
 
 get_ioq2_servers() ->
-    lists:map(fun(I) ->
-        list_to_atom("ioq_server_" ++ integer_to_list(I))
-    end, lists:seq(1, erlang:system_info(schedulers))).
+    [ioq_server2].
+    %%lists:map(fun(I) ->
+    %%    list_to_atom("ioq_server_" ++ integer_to_list(I))
+    %%end, lists:seq(1, erlang:system_info(schedulers))).
 
 handle_config_change("ioq", _Key, _Val, _Persist, St) ->
     gen_server:cast(ioq_server, update_config),
@@ -69,7 +70,8 @@ handle_config_terminate(_Server, _Reason, _State) ->
     ok.
 
 processes(ioq2) ->
-    filter_children("^ioq_server_.*$");
+    [{ioq_server2, whereis(ioq_server2)}];
+    %%filter_children("^ioq_server_.*$");
 processes(ioq) ->
     filter_children("^ioq_server$");
 processes(config_listener_mon) ->

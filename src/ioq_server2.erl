@@ -107,6 +107,14 @@ call(Fd, Msg, Dimensions) ->
 
 %% TODO: handle Clouseau requests with isolated IOQ2 pid
 %%call_int(#ioq_file{fd={clouseau, _}=IOF, Req) ->
+call_int({Name, Node}=Server, #ioq_request{msg=Msg}=Req) when is_atom(Name) andalso is_atom(Node) ->
+    case should_bypass(Req) of
+        true ->
+            gen_server:call(Server, Msg, infinity);
+        false ->
+            %% TODO: add dedicated clouseau IOQ pid
+            gen_server:call(ioq_server2, Req, infinity)
+    end;
 call_int(#ioq_file{ioq=undefined, fd=Fd}, #ioq_request{msg=Msg}=Req) ->
     Class = atom_to_list(Req#ioq_request.class),
     case config:get_boolean("ioq2.bypass", Class, false) of
@@ -637,6 +645,10 @@ prioritize_request(Req, State) ->
     end.
 
 
+should_bypass(#ioq_request{class=Class}) ->
+    config:get_boolean("ioq2.bypass", atom_to_list(Class), false).
+
+
 %% ioq_server2 Tests
 
 
@@ -954,7 +966,7 @@ setup() ->
         end,
         F(F)
     end,
-    spawn(fun() -> FakeServer(FakeServer) end).
+    #ioq_file{fd=spawn(fun() -> FakeServer(FakeServer) end)}.
 
 
 setup_many(Count, RespDelay) ->
@@ -977,7 +989,7 @@ setup_many(Count, RespDelay) ->
         end,
         F(F)
     end,
-    [spawn(fun() -> FakeServer(FakeServer) end) || _ <- lists:seq(1, Count)].
+    [#ioq_file{fd=spawn(fun() -> FakeServer(FakeServer) end)} || _ <- lists:seq(1, Count)].
 
 
 cleanup(Server) when not is_list(Server) ->
@@ -986,11 +998,12 @@ cleanup(Servers) ->
     ok = application:stop(ioq),
     true = meck:validate(config),
     ok = meck:unload(config),
-    [exit(Server, kill) || Server <- Servers].
+    [exit(ioq:fd_pid(Server), kill) || Server <- Servers].
 
 
 instantiate(S) ->
-    Old = ?DEFAULT_CONCURRENCY * (1 + length(shards())),
+    %%Old = ?DEFAULT_CONCURRENCY * (1 + length(shards())),
+    Old = ?DEFAULT_CONCURRENCY,
     [{inparallel, lists:map(fun(IOClass) ->
         lists:map(fun(Shard) ->
             check_call(S, make_ref(), priority(IOClass, Shard))
