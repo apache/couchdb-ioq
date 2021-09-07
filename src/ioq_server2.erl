@@ -115,6 +115,14 @@ call_int({Name, Node}=Server, #ioq_request{msg=Msg}=Req) when is_atom(Name) anda
             %% TODO: add dedicated clouseau IOQ pid
             gen_server:call(ioq_server2, Req, infinity)
     end;
+call_int(Pid, #ioq_request{msg=Msg}=Req) when is_pid(Pid) ->
+    case should_bypass(Req) of
+        true ->
+            gen_server:call(Pid, Msg, infinity);
+        false ->
+            %% TODO: add dedicated clouseau IOQ pid
+            gen_server:call(ioq_server2, Req, infinity)
+    end;
 call_int(#ioq_file{ioq=undefined, fd=Fd}, #ioq_request{msg=Msg}=Req) ->
     Class = atom_to_list(Req#ioq_request.class),
     case config:get_boolean("ioq2.bypass", Class, false) of
