@@ -64,7 +64,8 @@
 -record(ioq_file, {
     fd,
     ioq,
-    tab
+    tab,
+    parallel=false
 }).
 
 
