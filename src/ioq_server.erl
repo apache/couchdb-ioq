@@ -558,20 +558,10 @@ iso8601_timestamp() ->
     io_lib:format(Format, [Year, Month, Date, Hour, Minute, Second, Micro]).
 
 get_interval() ->
-    case application:get_env(ioq, stats_interval) of
-    {ok, Interval} when is_integer(Interval) ->
-        Interval;
-    _ ->
-        60000
-    end.
+    config:get_integer("ioq", "stats_interval", 60*1000).
 
 get_stats_dbname() ->
-    case application:get_env(ioq, stats_db) of
-    {ok, DbName} when is_list(DbName) ->
-        DbName;
-    _ ->
-        "stats"
-    end.
+    config:get("ioq", "stats_db", "stats").
 
 split(B) when is_binary(B) ->
     split(B, 0, 0, []);
