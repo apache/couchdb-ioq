@@ -527,8 +527,11 @@ save_to_db() ->
         ]},
         try
             fabric:update_doc(get_stats_dbname(), Doc, [])
-        catch error:database_does_not_exist ->
-            couch_log:debug("Missing IOQ stats db: ~s", [get_stats_dbname()])
+        catch
+            error:database_does_not_exist ->
+                couch_log:debug("Missing IOQ stats db: ~s", [get_stats_dbname()]);
+            error:conflict ->
+                couch_log:info("~p:save_to_db conflict saving ~p", [?MODULE, Doc])
         end
     after Timeout ->
         error_logger:error_report({?MODULE, "ets transfer failed"})
