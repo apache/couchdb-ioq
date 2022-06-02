@@ -10,15 +10,15 @@
 % License for the specific language governing permissions and limitations under
 % the License.
 
-{application,ioq, [
+{application, ioq, [
     {description, "IO request management in a multi-tenant Erlang VM"},
     {vsn, git},
-    {registered,[]},
-    {applications,[kernel,stdlib,config,couch_stats,hqueue]},
-    {mod,{ioq_app,[]}},
+    {registered, []},
+    {applications, [kernel, stdlib, config, couch_stats, hqueue]},
+    {mod, {ioq_app, []}},
     {env, [
         {stats_db, "stats"},
         {stats_interval, 60000}
     ]},
-    {modules,[ioq,ioq_app,ioq_osq,ioq_server,ioq_sup]}
+    {modules, [ioq, ioq_app, ioq_osq, ioq_server, ioq_sup]}
 ]}.

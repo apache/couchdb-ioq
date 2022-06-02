@@ -1,2 +1,6 @@
 .rebar
 ebin/
+
+.idea
+_build
+*.lock
