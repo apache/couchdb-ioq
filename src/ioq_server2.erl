@@ -577,10 +577,51 @@ time_delta(T1, T0) ->
 -spec rw(io_dimensions()) -> read_write().
 rw({pread_iolist, _}) ->
     reads;
+rw({pread_iolists, _}) ->
+    reads;
 rw({append_bin, _}) ->
+    writes;
+rw({append_bins, _}) ->
     writes;
 rw({append_bin, _, _}) ->
     writes;
+rw(find_header) ->
+    reads;
+rw({write_header, _}) ->
+    writes;
+%% Search classes
+rw({open, _Peer, _Path, _Analyzer}) ->
+    reads;
+rw({disk_size, _Path}) ->
+    reads;
+rw({get_root_dir}) ->
+    reads;
+rw({await, _Min_Seq}) ->
+    reads;
+rw({commit, _New_Commit_Seq}) ->
+    reads;
+rw(info) ->
+    reads;
+rw(get_update_seq) ->
+    reads;
+rw({set_purge_seq, _Seq}) ->
+    reads;
+rw(get_purge_seq) ->
+    reads;
+rw({search, _Args}) ->
+    reads;
+rw({group1, _Query, _Group_By, _Refresh, _Sort, _Offset, _Limit}) ->
+    reads;
+rw({group2, _Args}) ->
+    reads;
+rw({delete, _Id}) ->
+    reads;
+rw({update, _Id, _Fields}) ->
+    writes;
+rw({analyze, _Analyzer, _Text}) ->
+    reads;
+rw(version) ->
+    reads;
 rw(_) ->
     unknown.
 

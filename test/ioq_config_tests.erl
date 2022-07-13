@@ -284,7 +284,7 @@ check_default_classes(_) ->
 
 
 check_undeclared_class(_) ->
-    ?_assert(not ioq_config:is_valid_class(search)).
+    ?_assert(not ioq_config:is_valid_class(external)).
 
 
 check_declared_class(_) ->
