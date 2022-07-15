@@ -14,6 +14,7 @@
 -compile(export_all).
 
 -include_lib("eunit/include/eunit.hrl").
+-include_lib("ioq/include/ioq.hrl").
 
 all_test_() ->
     {setup, fun setup/0, fun cleanup/1, fun instantiate/1}.
@@ -35,12 +36,18 @@ cleanup({Apps, Server}) ->
     exit(Server, kill).
 
 instantiate({_, S}) ->
+    Old = case ioq:ioq2_enabled() of
+        true ->
+            ?DEFAULT_IOQ2_CONCURRENCY * length(ioq_sup:get_ioq2_servers());
+        false ->
+            20
+    end,
     [{inparallel, lists:map(fun(IOClass) ->
         lists:map(fun(Shard) ->
             check_call(S, make_ref(), priority(IOClass, Shard))
         end, shards())
     end, io_classes())},
-    ?_assertEqual(20, ioq:set_disk_concurrency(10)),
+    ?_assertEqual(Old, ioq:set_disk_concurrency(10)),
     ?_assertError(badarg, ioq:set_disk_concurrency(0)),
     ?_assertError(badarg, ioq:set_disk_concurrency(-1)),
     ?_assertError(badarg, ioq:set_disk_concurrency(foo))].
@@ -49,7 +56,7 @@ check_call(Server, Call, Priority) ->
     ?_assertEqual({reply, Call}, ioq:call(Server, Call, Priority)).
 
 io_classes() -> [interactive, view_update, db_compact, view_compact,
-    internal_repl, other].
+    internal_repl, other, search, system].
 
 shards() ->
     [

@@ -15,9 +15,11 @@
 -vsn(1).
 -behaviour(config_listener).
 -export([start_link/0, init/1]).
--export([get_ioq2_servers/0]).
+-export([get_ioq2_servers/0, get_all_ioq2_servers/0]).
 -export([handle_config_change/5, handle_config_terminate/3]).
 -export([processes/1]).
+
+-include_lib("ioq/include/ioq.hrl").
 
 %% Helper macro for declaring children of supervisor
 -define(CHILD(I, Type), {I, {I, start_link, []}, permanent, 5000, Type, [I]}).
@@ -40,8 +42,10 @@ init([]) ->
     }}.
 
 ioq_server2_children() ->
+    Name = ?IOQ2_SEARCH_SERVER,
+    Search = {Name, {ioq_server2, start_link, [Name, search, false]}, permanent, 5000, worker, [Name]},
     Bind = config:get_boolean("ioq2", "bind_to_schedulers", false),
-    ioq_server2_children(erlang:system_info(schedulers), Bind).
+    [Search | ioq_server2_children(erlang:system_info(schedulers), Bind)].
 
 ioq_server2_children(Count, Bind) ->
     lists:map(fun(I) ->
@@ -54,8 +58,14 @@ get_ioq2_servers() ->
         list_to_atom("ioq_server_" ++ integer_to_list(I))
     end, lists:seq(1, erlang:system_info(schedulers))).
 
+get_all_ioq2_servers() ->
+    [?IOQ2_SEARCH_SERVER | get_ioq2_servers()].
+
 handle_config_change("ioq", _Key, _Val, _Persist, St) ->
     gen_server:cast(ioq_server, update_config),
+    {ok, St};
+handle_config_change("ioq2.search", _Key, _Val, _Persist, St) ->
+    gen_server:cast(?IOQ2_SEARCH_SERVER, update_config),
     {ok, St};
 handle_config_change("ioq2" ++ _, _Key, _Val, _Persist, St) ->
     lists:foreach(fun({_Id, Pid}) ->

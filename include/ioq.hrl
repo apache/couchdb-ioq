@@ -11,13 +11,16 @@
 % the License.
 
 -define(DEFAULT_PRIORITY, 1.0).
+-define(DEFAULT_IOQ2_CONCURRENCY, 1).
 -define(BAD_MAGIC_NUM, -12341234).
 
 %% Dispatch Strategies
--define(DISPATCH_RANDOM, "random").
--define(DISPATCH_FD_HASH, "fd_hash").
--define(DISPATCH_SINGLE_SERVER, "single_server").
--define(DISPATCH_SERVER_PER_SCHEDULER, "server_per_scheduler").
+-define(DISPATCH_RANDOM, random).
+-define(DISPATCH_FD_HASH, fd_hash).
+-define(DISPATCH_SINGLE_SERVER, single_server).
+-define(DISPATCH_SERVER_PER_SCHEDULER, server_per_scheduler).
+
+-define(IOQ2_SEARCH_SERVER, ioq_server_search).
 
 %% Config Categories
 -define(SHARD_CLASS_SEPARATOR, "||").

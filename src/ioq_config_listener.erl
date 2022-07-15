@@ -24,11 +24,16 @@
     handle_config_terminate/3
 ]).
 
+-include_lib("ioq/include/ioq.hrl").
+
 subscribe() ->
     config:listen_for_changes(?MODULE, nil).
 
 handle_config_change("ioq", _Key, _Val, _Persist, St) ->
-    ok = notify_ioq_pids(),
+    ok = notify_ioq_pid(ioq_server),
+    {ok, St};
+handle_config_change("ioq2.search", _Key, _Val, _Persist, St) ->
+    ok = notify_ioq_pid(?IOQ2_SEARCH_SERVER),
     {ok, St};
 handle_config_change("ioq2", _Key, _Val, _Persist, St) ->
     ok = notify_ioq_pids(),
@@ -49,6 +54,7 @@ handle_config_terminate(_, _, _) ->
     end).
 
 notify_ioq_pids() ->
-    ok = lists:foreach(fun(Pid) ->
-        gen_server:cast(Pid, update_config)
-    end, ioq_sup:get_ioq2_servers()).
+    ok = lists:foreach(fun notify_ioq_pid/1, ioq_sup:get_ioq2_servers()).
+
+notify_ioq_pid(Pid) ->
+    gen_server:cast(Pid, update_config).

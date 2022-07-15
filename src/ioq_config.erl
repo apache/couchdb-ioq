@@ -50,6 +50,7 @@
     set_scale_factor/2,
     set_resize_limit/2,
     set_concurrency/2,
+    get_dispatch_strategy/0,
     set_dispatch_strategy/2
 ]).
 
@@ -87,6 +88,15 @@ set_concurrency(Value, Reason) when is_integer(Value) ->
     set_config(?IOQ2_CONFIG, "concurrency", integer_to_list(Value), Reason).
 
 
+get_dispatch_strategy() ->
+    case config:get("ioq2", "dispatch_strategy", undefined) of
+        undefined         -> ?DISPATCH_SERVER_PER_SCHEDULER;
+        DispatchStrategy0 -> list_to_atom(DispatchStrategy0)
+    end.
+
+
+set_dispatch_strategy(Value, Reason) when is_list(Value) ->
+    set_dispatch_strategy(list_to_existing_atom(Value), Reason);
 set_dispatch_strategy(Value, Reason) ->
     ErrorMsg = "Dispatch strategy must be one of "
         "random, fd_hash, server_per_scheduler, or single_server.",
@@ -97,7 +107,7 @@ set_dispatch_strategy(Value, Reason) ->
         ?DISPATCH_SERVER_PER_SCHEDULER -> ok;
         _                              -> throw({badarg, ErrorMsg})
     end,
-    config:set(?IOQ2_CONFIG, "dispatch_strategy", Value, Reason).
+    config:set(?IOQ2_CONFIG, "dispatch_strategy", atom_to_list(Value), Reason).
 
 
 set_db_config(DbName, Class, Value, Reason) when is_binary(DbName) ->
