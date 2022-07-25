@@ -218,12 +218,18 @@ analyze_priority({db_update, Shard}) ->
     {db_update, channel_name(Shard)};
 analyze_priority({view_update, Shard, _GroupId}) ->
     {view_update, channel_name(Shard)};
+analyze_priority({search, Shard}) ->
+    {search, channel_name(Shard)};
+analyze_priority({search, Shard, _GroupId}) ->
+    {search, channel_name(Shard)};
 analyze_priority({db_compact, _Shard}) ->
     {db_compact, nil};
 analyze_priority({view_compact, _Shard, _GroupId}) ->
     {view_compact, nil};
 analyze_priority({internal_repl, _Shard}) ->
     {internal_repl, nil};
+analyze_priority({system, _Shard}) ->
+    {system, nil};
 analyze_priority({low, _Shard}) ->
     {low, nil};
 analyze_priority(_Else) ->
@@ -465,6 +471,10 @@ make_key(interactive, {pread_iolist, _}) ->
     <<"reads">>;
 make_key(interactive, {append_bin, _}) ->
     <<"writes">>;
+make_key(system, _) ->
+    <<"system">>;
+make_key(search, _) ->
+    <<"search">>;
 make_key(_, _) ->
     <<"other">>.
 
@@ -586,8 +596,51 @@ split(B, O, S, Acc) ->
 
 rw({pread_iolist, _}) ->
     reads;
+rw({pread_iolists, _}) ->
+    reads;
 rw({append_bin, _}) ->
     writes;
+rw({append_bins, _}) ->
+    writes;
+rw({append_bin, _, _}) ->
+    writes;
+rw(find_header) ->
+    reads;
+rw({write_header, _}) ->
+    writes;
+%% Search classes
+rw({open, _Peer, _Path, _Analyzer}) ->
+    reads;
+rw({disk_size, _Path}) ->
+    reads;
+rw({get_root_dir}) ->
+    reads;
+rw({await, _Min_Seq}) ->
+    reads;
+rw({commit, _New_Commit_Seq}) ->
+    reads;
+rw(info) ->
+    reads;
+rw(get_update_seq) ->
+    reads;
+rw({set_purge_seq, _Seq}) ->
+    reads;
+rw(get_purge_seq) ->
+    reads;
+rw({search, _Args}) ->
+    reads;
+rw({group1, _Query, _Group_By, _Refresh, _Sort, _Offset, _Limit}) ->
+    reads;
+rw({group2, _Args}) ->
+    reads;
+rw({delete, _Id}) ->
+    reads;
+rw({update, _Id, _Fields}) ->
+    writes;
+rw({analyze, _Analyzer, _Text}) ->
+    reads;
+rw(version) ->
+    reads;
 rw(_) ->
     unknown.
 

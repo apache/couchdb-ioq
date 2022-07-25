@@ -39,7 +39,9 @@
     {db_update, 1.0},
     {view_update, 1.0},
     {other, 1.0},
-    {interactive, 1.0}
+    {interactive, 1.0},
+    {system, 1.0},
+    {search, 1.0}
 ]).
 
 
@@ -64,6 +66,8 @@
 -type io_priority() :: db_compact
     | db_update
     | interactive
+    | system
+    | search
     | internal_repl
     | other
     | customer
@@ -75,6 +79,7 @@
 -type dbname() :: binary() | dbcopy_string().
 -type group_id() :: any().
 -type io_dimensions() :: {io_priority(), dbname()}
-    | {view_io_priority(), dbname(), group_id()}.
+    | {view_io_priority(), dbname(), group_id()}
+    | {search, dbname(), group_id()}.
 -type ioq_request() :: #ioq_request{}.
 

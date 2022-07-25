@@ -17,8 +17,21 @@
 -export([
     ioq2_enabled/0
 ]).
+-export([get_io_priority/0, set_io_priority/1, maybe_set_io_priority/1]).
 
 -define(APPS, [config, folsom, couch_stats, ioq]).
+
+set_io_priority(Priority) ->
+    erlang:put(io_priority, Priority).
+
+get_io_priority() ->
+    erlang:get(io_priority).
+
+maybe_set_io_priority(Priority) ->
+    case get_io_priority() of
+        undefined -> set_io_priority(Priority);
+        _ -> ok
+    end.
 
 start() ->
     lists:foldl(fun(App, _) -> application:start(App) end, ok, ?APPS).
