@@ -25,6 +25,7 @@
 -export([
     start_link/3,
     call/3,
+    call_search/3,
     pcall/1,
     pcall/2
 ]).
@@ -44,7 +45,6 @@
 
 
 -define(DEFAULT_RESIZE_LIMIT, 1000).
--define(DEFAULT_CONCURRENCY, 1).
 -define(DEFAULT_SCALE_FACTOR, 2.0).
 -define(DEFAULT_MAX_PRIORITY, 10000.0).
 
@@ -53,7 +53,7 @@
     reqs :: khash:khash(),
     waiters :: khash:khash(),
     queue :: hqueue:hqueue(),
-    concurrency = ?DEFAULT_CONCURRENCY :: pos_integer(),
+    concurrency = ?DEFAULT_IOQ2_CONCURRENCY :: pos_integer(),
     iterations = 0 :: non_neg_integer(),
     class_p :: khash:khash(),  %% class priorities
     user_p :: khash:khash(),   %% user priorities
@@ -93,6 +93,15 @@
 
 -spec call(pid(), term(), io_dimensions()) -> term().
 call(Fd, Msg, Dimensions) ->
+    call_int(Fd, Msg, Dimensions, normal).
+
+
+-spec call_search(pid(), term(), io_dimensions()) -> term().
+call_search(Fd, Msg, Dimensions) ->
+    call_int(Fd, Msg, Dimensions, search).
+
+
+call_int(Fd, Msg, Dimensions, IOType) ->
     Req0 = #ioq_request{
         fd = Fd,
         msg = Msg,
@@ -108,23 +117,27 @@ call(Fd, Msg, Dimensions) ->
                 [couchdb, io_queue2, RW, bypassed_count]),
             gen_server:call(Fd, Msg, infinity);
         _ ->
-            DispatchStrategy = config:get(
-                "ioq2", "dispatch_strategy", ?DISPATCH_SERVER_PER_SCHEDULER),
-            Server = case DispatchStrategy of
-                ?DISPATCH_RANDOM ->
-                    SID = rand:uniform(erlang:system_info(schedulers)),
-                    ?SERVER_ID(SID);
-                ?DISPATCH_FD_HASH ->
-                    NumSchedulers = erlang:system_info(schedulers),
-                    SID = 1 + (erlang:phash2(Fd) rem NumSchedulers),
-                    ?SERVER_ID(SID);
-                ?DISPATCH_SINGLE_SERVER ->
-                    ?SERVER_ID(1);
-                _ ->
-                    SID = erlang:system_info(scheduler_id),
-                    ?SERVER_ID(SID)
-            end,
+            Server = ioq_server(Req, IOType),
             gen_server:call(Server, Req, infinity)
+    end.
+
+
+ioq_server(#ioq_request{}, search) ->
+    ?IOQ2_SEARCH_SERVER;
+ioq_server(#ioq_request{fd=Fd}, _) ->
+    case ioq_config:get_dispatch_strategy() of
+        ?DISPATCH_RANDOM ->
+            SID = rand:uniform(erlang:system_info(schedulers)),
+            ?SERVER_ID(SID);
+        ?DISPATCH_FD_HASH ->
+            NumSchedulers = erlang:system_info(schedulers),
+            SID = 1 + (erlang:phash2(Fd) rem NumSchedulers),
+            ?SERVER_ID(SID);
+        ?DISPATCH_SINGLE_SERVER ->
+            ?SERVER_ID(1);
+        _ ->
+            SID = erlang:system_info(scheduler_id),
+            ?SERVER_ID(SID)
     end.
 
 
@@ -368,17 +381,21 @@ code_change(_OldVsn, #state{}=State, _Extra) ->
 
 -spec update_config_int(state()) -> state().
 update_config_int(State) ->
-    Concurrency = config:get_integer("ioq2", "concurrency", ?DEFAULT_CONCURRENCY),
-    ResizeLimit = config:get_integer("ioq2", "resize_limit", ?DEFAULT_RESIZE_LIMIT),
-    DeDupe = config:get_boolean("ioq2", "dedupe", true),
+    Category = case State#state.scheduler_id of
+        search -> "ioq2.search";
+        _ -> "ioq2"
+    end,
+    Concurrency = config:get_integer(Category, "concurrency", ?DEFAULT_IOQ2_CONCURRENCY),
+    ResizeLimit = config:get_integer(Category, "resize_limit", ?DEFAULT_RESIZE_LIMIT),
+    DeDupe = config:get_boolean(Category, "dedupe", true),
 
     ScaleFactor = ioq_config:to_float(
-        config:get("ioq2", "scale_factor"),
+        config:get(Category, "scale_factor"),
         ?DEFAULT_SCALE_FACTOR
     ),
 
     MaxPriority = ioq_config:to_float(
-        config:get("ioq2", "max_priority"),
+        config:get(Category, "max_priority"),
         ?DEFAULT_MAX_PRIORITY
     ),
 
@@ -999,16 +1016,16 @@ cleanup(Servers) ->
 
 
 instantiate(S) ->
-    Old = ?DEFAULT_CONCURRENCY * length(ioq_sup:get_ioq2_servers()),
+    Old = ?DEFAULT_IOQ2_CONCURRENCY * length(ioq_sup:get_ioq2_servers()),
     [{inparallel, lists:map(fun(IOClass) ->
         lists:map(fun(Shard) ->
             check_call(S, make_ref(), priority(IOClass, Shard))
         end, shards())
     end, io_classes())},
-    ?_assertEqual(Old, ioq:set_disk_concurrency(10)),
-    ?_assertError(badarg, ioq:set_disk_concurrency(0)),
-    ?_assertError(badarg, ioq:set_disk_concurrency(-1)),
-    ?_assertError(badarg, ioq:set_disk_concurrency(foo))].
+    ?_assertEqual(Old, ?MODULE:set_concurrency(10)),
+    ?_assertError(badarg, ?MODULE:set_concurrency(0)),
+    ?_assertError(badarg, ?MODULE:set_concurrency(-1)),
+    ?_assertError(badarg, ?MODULE:set_concurrency(foo))].
 
 
 check_call(Server, Call, Priority) ->

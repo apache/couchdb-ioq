@@ -231,7 +231,8 @@ check_simple_configs(_) ->
         {set_scale_factor, 3.14, "3.14"},
         {set_max_priority, 99999.99, "99999.99"},
         {set_enabled, true, "true"},
-        {set_dispatch_strategy, ?DISPATCH_FD_HASH, ?DISPATCH_FD_HASH}
+        {set_dispatch_strategy,
+            ?DISPATCH_FD_HASH, atom_to_list(?DISPATCH_FD_HASH)}
     ],
 
     Reason = "ioq_config_tests",

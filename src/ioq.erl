@@ -11,9 +11,9 @@
 % the License.
 
 -module(ioq).
--export([start/0, stop/0, call/3, call/4, set_disk_concurrency/1,
-    get_disk_queues/0, get_osproc_queues/0, get_osproc_requests/0,
-    get_disk_counters/0, get_disk_concurrency/0]).
+-export([start/0, stop/0, call/3, call/4, call_search/3,
+    set_disk_concurrency/1, get_disk_queues/0, get_osproc_queues/0,
+    get_osproc_requests/0, get_disk_counters/0, get_disk_concurrency/0]).
 -export([
     ioq2_enabled/0
 ]).
@@ -50,6 +50,12 @@ call(Fd, Msg, Priority) ->
     case ioq2_enabled() of
         false -> ioq_server:call(Fd, Msg, Priority);
         true  -> ioq_server2:call(Fd, Msg, Priority)
+    end.
+
+call_search(Fd, Msg, Priority) ->
+    case ioq2_enabled() of
+        false -> ioq_server:call(Fd, Msg, Priority);
+        true  -> ioq_server2:call_search(Fd, Msg, Priority)
     end.
 
 set_disk_concurrency(C) when is_integer(C), C > 0 ->
