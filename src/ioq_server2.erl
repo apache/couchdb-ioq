@@ -44,7 +44,7 @@
 
 
 -define(DEFAULT_RESIZE_LIMIT, 1000).
--define(DEFAULT_CONCURRENCY, 1).
+-define(DEFAULT_CONCURRENCY, 9).
 -define(DEFAULT_SCALE_FACTOR, 2.0).
 -define(DEFAULT_MAX_PRIORITY, 10000.0).
 
@@ -834,7 +834,7 @@ test_simple_dedupe(St0) ->
         from = FromA,
         key = {Fd, Pos}
     },
-    _Request1B = Request0#ioq_request{
+    _ = Request0#ioq_request{
         init_priority = Priority,
         from = FromA,
         key = {Fd, Pos}
@@ -908,7 +908,7 @@ test_auto_scale(#state{queue=HQ}=St0) ->
     {_, #ioq_request{init_priority=PriorityA2}} = hqueue:extract_max(HQ),
     Tests0 = [?_assertEqual(PriorityA, PriorityA2)],
     {_St, Tests} = lists:foldl(
-        fun(_N, {#state{iterations=I, resize_limit=RL}=StN0, TestsN}) ->
+        fun(_N, {#state{iterations=I}=StN0, TestsN}) ->
             ReqN = BaseReq#ioq_request{ref=make_ref()},
             ExpectedPriority = case I == 1 of
                 false -> PriorityA;
@@ -1000,6 +1000,7 @@ cleanup(Servers) ->
 
 instantiate(S) ->
     Old = ?DEFAULT_CONCURRENCY * length(ioq_sup:get_ioq2_servers()),
+    ?debugFmt(" +++ ioq_sup:get_ioq2_servers():~p~n~n", [ioq_sup:get_ioq2_servers()]),
     [{inparallel, lists:map(fun(IOClass) ->
         lists:map(fun(Shard) ->
             check_call(S, make_ref(), priority(IOClass, Shard))
