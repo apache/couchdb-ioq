@@ -1,3 +1,5 @@
+% vim: set ft=erlang : -*- erlang -*- % Magic lines for code editors
+
 WithProper = code:lib_dir(proper) /= {error, bad_name}.
 
 
