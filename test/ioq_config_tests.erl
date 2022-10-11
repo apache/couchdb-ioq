@@ -35,8 +35,14 @@ config_update_test_() ->
         "Test config updates",
         {
             foreach,
-            fun() -> test_util:start_applications([config, couch_log, ioq]) end,
-            fun test_util:stop_applications/1,
+            fun() ->
+                meck:expect(couch_log, notice, fun(_, _) -> ok end),
+                test_util:start_applications([config, ioq])
+            end,
+            fun(Apps) ->
+                test_util:stop_applications(Apps),
+                meck:unload()
+            end,
             [
                 fun t_restart_config_listener/1,
                 fun t_update_ioq_config/1,
@@ -204,8 +210,14 @@ config_set_test_() ->
         "Test ioq_config setters",
         {
             foreach,
-            fun() -> test_util:start_applications([config, couch_log]) end,
-            fun(_) -> test_util:stop_applications([config, couch_log]) end,
+            fun() ->
+                meck:expect(couch_log, notice, fun(_, _) -> ok end),
+                test_util:start_applications([config])
+            end,
+            fun(_) ->
+                test_util:stop_applications([config]),
+                meck:unload()
+            end,
             [
                 fun check_simple_configs/1,
                 fun check_bypass_configs/1
@@ -268,8 +280,14 @@ valid_classes_test_() ->
         "Test ioq_config is_valid_class logic",
         {
             foreach,
-            fun() -> test_util:start_applications([config, couch_log]) end,
-            fun(_) -> test_util:stop_applications([config, couch_log]) end,
+            fun() ->
+                meck:expect(couch_log, notice, fun(_, _) -> ok end),
+                test_util:start_applications([config])
+            end,
+            fun(_) ->
+                test_util:stop_applications([config]),
+                meck:unload()
+            end,
             [
                 fun check_default_classes/1,
                 fun check_undeclared_class/1,
