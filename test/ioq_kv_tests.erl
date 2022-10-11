@@ -122,7 +122,7 @@ random_key(#st{kvs=KVs}) ->
     Keys0 = dict:fetch_keys(KVs),
     Keys = lists:append(Keys0, [foo]),
     NumKeys = erlang:length(Keys),
-    KeyPos = random:uniform(NumKeys),
+    KeyPos = rand:uniform(NumKeys),
     lists:nth(KeyPos, Keys).
 
 cleanup() ->

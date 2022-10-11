@@ -11,7 +11,6 @@
 % the License.
 
 -module(ioq_tests).
--compile(export_all).
 
 -include_lib("eunit/include/eunit.hrl").
 -include_lib("ioq/include/ioq.hrl").
