@@ -851,11 +851,6 @@ test_simple_dedupe(St0) ->
         from = FromA,
         key = {Fd, Pos}
     },
-    _Request1B = Request0#ioq_request{
-        init_priority = Priority,
-        from = FromA,
-        key = {Fd, Pos}
-    },
     {noreply, St2, 0} = handle_call(Request0, FromA, St1),
     {noreply, St3, 0} = handle_call(Request0, FromB, St2),
     {reply, RespState, _St4, 0} = handle_call(get_state, FromA, St3),
@@ -925,7 +920,7 @@ test_auto_scale(#state{queue=HQ}=St0) ->
     {_, #ioq_request{init_priority=PriorityA2}} = hqueue:extract_max(HQ),
     Tests0 = [?_assertEqual(PriorityA, PriorityA2)],
     {_St, Tests} = lists:foldl(
-        fun(_N, {#state{iterations=I, resize_limit=RL}=StN0, TestsN}) ->
+        fun(_N, {#state{iterations=I}=StN0, TestsN}) ->
             ReqN = BaseReq#ioq_request{ref=make_ref()},
             ExpectedPriority = case I == 1 of
                 false -> PriorityA;
