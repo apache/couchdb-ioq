@@ -46,6 +46,8 @@ that the mapping of IOQ classes to class priorities is not 1:1.
 | internal_repl | replication   | IO requests related to internal            |
 |               |               | replication.                               |
 |               |               |                                            |
+| reshard       | reshard       | IO requests related to resharding jobs     |
+|               |               |                                            |
 | low           | low           | IO requests related to requests made by    |
 |               |               | users via the http layer where the         |
 |               |               | "x-cloudant-priority: low" header is set.  |
