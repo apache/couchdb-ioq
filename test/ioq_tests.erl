@@ -55,7 +55,7 @@ check_call(Server, Call, Priority) ->
     ?_assertEqual({reply, Call}, ioq:call(Server, Call, Priority)).
 
 io_classes() -> [interactive, view_update, db_compact, view_compact,
-    internal_repl, other, search, system].
+    internal_repl, other, search, system, reshard].
 
 shards() ->
     [

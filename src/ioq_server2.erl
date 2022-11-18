@@ -776,6 +776,7 @@ queue_depths_test_() ->
         #ioq_request{user=Foo, class=view_update},
         #ioq_request{user=Foo, class=view_update},
         #ioq_request{user=Foo, class=view_update},
+        #ioq_request{user=Foo, class=reshard},
 
         #ioq_request{user=Bar, class=interactive},
         #ioq_request{user=Bar, class=db_update},
@@ -788,7 +789,7 @@ queue_depths_test_() ->
         {replication, 3},
         {low, 1},
         {channels, {[
-            {<<"foo">>, [2,1,4]},
+            {<<"foo">>, [3,1,4]},
             {<<"bar">>, [1,3,1]}
         ]}}
     ],
@@ -1028,7 +1029,7 @@ check_call(Server, Call, Priority) ->
 
 
 io_classes() -> [interactive, view_update, db_compact, view_compact,
-    internal_repl, other, db_meta].
+    internal_repl, other, db_meta, reshard].
 
 
 shards() ->

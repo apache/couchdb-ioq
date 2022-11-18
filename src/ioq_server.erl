@@ -228,6 +228,8 @@ analyze_priority({view_compact, _Shard, _GroupId}) ->
     {view_compact, nil};
 analyze_priority({internal_repl, _Shard}) ->
     {internal_repl, nil};
+analyze_priority({reshard, _Shard}) ->
+    {reshard, nil};
 analyze_priority({system, _Shard}) ->
     {system, nil};
 analyze_priority({low, _Shard}) ->
@@ -256,6 +258,8 @@ enqueue_request(#request{class = db_compact} = Req, State) ->
 enqueue_request(#request{class = view_compact} = Req, State) ->
     State#state{qC = update_queue(Req, State#state.qC, State#state.dedupe)};
 enqueue_request(#request{class = internal_repl} = Req, State) ->
+    State#state{qR = update_queue(Req, State#state.qR, State#state.dedupe)};
+enqueue_request(#request{class = reshard} = Req, State) ->
     State#state{qR = update_queue(Req, State#state.qR, State#state.dedupe)};
 enqueue_request(#request{class = low} = Req, State) ->
     State#state{qL = update_queue(Req, State#state.qL, State#state.dedupe)};
@@ -473,6 +477,8 @@ make_key(interactive, {append_bin, _}) ->
     <<"writes">>;
 make_key(system, _) ->
     <<"system">>;
+make_key(reshard, _) ->
+    <<"reshard">>;
 make_key(search, _) ->
     <<"search">>;
 make_key(_, _) ->

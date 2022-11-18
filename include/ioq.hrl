@@ -44,7 +44,8 @@
     {other, 1.0},
     {interactive, 1.0},
     {system, 1.0},
-    {search, 1.0}
+    {search, 1.0},
+    {reshard, 0.001}
 ]).
 
 
@@ -72,6 +73,7 @@
     | system
     | search
     | internal_repl
+    | reshard
     | other
     | customer
     | db_meta
