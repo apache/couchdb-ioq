@@ -20,7 +20,7 @@ all_test_() ->
 
 setup() ->
     Apps = test_util:start_applications([
-        config, folsom, couch_log, couch_stats, ioq
+        config, couch_log, couch_stats, ioq
     ]),
     FakeServer = fun(F) ->
         receive {'$gen_call', {Pid, Ref}, Call} ->
