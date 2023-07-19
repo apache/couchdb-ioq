@@ -19,7 +19,7 @@
 ]).
 -export([get_io_priority/0, set_io_priority/1, maybe_set_io_priority/1]).
 
--define(APPS, [config, folsom, couch_stats, ioq]).
+-define(APPS, [config, couch_stats, ioq]).
 
 set_io_priority(Priority) ->
     erlang:put(io_priority, Priority).
