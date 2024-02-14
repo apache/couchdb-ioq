@@ -47,12 +47,16 @@ call(Pid, {prompt, _} = Msg, Priority) ->
 call(Pid, {data, _} = Msg, Priority) ->
     ioq_osq:call(Pid, Msg, Priority);
 call(Fd, Msg, Priority) ->
+    %% TODO: should this key off of existing couch_stats like most things?
+    %% TODO: if so, which set of IOQ fields and to what granularity?
+    couch_stats_resource_tracker:ioq_called(),
     case ioq2_enabled() of
         false -> ioq_server:call(Fd, Msg, Priority);
         true  -> ioq_server2:call(Fd, Msg, Priority)
     end.
 
 call_search(Fd, Msg, Priority) ->
+    couch_stats_resource_tracker:ioq_called(), %% TODO: flag as search
     case ioq2_enabled() of
         false -> ioq_server:call(Fd, Msg, Priority);
         true  -> ioq_server2:call_search(Fd, Msg, Priority)
