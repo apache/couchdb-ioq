@@ -18,6 +18,7 @@
 
 -export([start_link/0, call/3]).
 -export([add_channel/3, rem_channel/2, list_custom_channels/0]).
+-export([bypass/2]).
 
 -record(channel, {
     name,
@@ -61,23 +62,28 @@ start_link() ->
     gen_server:start_link({local, ?MODULE}, ?MODULE, [], []).
 
 call(Fd, Msg, Priority) ->
-    {Class, Channel} = analyze_priority(Priority),
-    Request = #request{
-        fd = Fd,
-        msg = Msg,
-        channel = Channel,
-        class = Class,
-        t0 = erlang:monotonic_time()
-    },
-    case config:get("ioq.bypass", atom_to_list(Class)) of
-        "true" ->
+    case bypass(Msg, Priority) of
+        true ->
+            {Class, _} = analyze_priority(Priority),
             RW = rw(Msg),
             catch couch_stats:increment_counter([couchdb, io_queue_bypassed, Class]),
             catch couch_stats:increment_counter([couchdb, io_queue_bypassed, RW]),
             gen_server:call(Fd, Msg, infinity);
-        _ ->
+        false ->
+            {Class, Channel} = analyze_priority(Priority),
+            Request = #request{
+                fd = Fd,
+                msg = Msg,
+                channel = Channel,
+                class = Class,
+                t0 = erlang:monotonic_time()
+            },
             gen_server:call(?MODULE, Request, infinity)
     end.
+
+bypass(_Msg, Priority) ->
+    {Class, _} = analyze_priority(Priority),
+    config:get_boolean("ioq.bypass", atom_to_list(Class), false).
 
 add_channel(Account, DbName, ChannelName) ->
     ok = ioq_kv:put({Account, DbName}, ChannelName).

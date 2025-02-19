@@ -14,7 +14,7 @@
 
 
 -include_lib("ioq/include/ioq.hrl").
--include_lib("eunit/include/eunit.hrl").
+-include_lib("couch/include/couch_eunit.hrl").
 
 
 -define(USERS_CONFIG, [{"bar","2.4"},{"baz","4.0"},{"foo","1.2"}]).
@@ -44,103 +44,94 @@ config_update_test_() ->
                 meck:unload()
             end,
             [
-                fun t_restart_config_listener/1,
-                fun t_update_ioq_config/1,
-                fun t_update_ioq2_config/1,
-                fun t_update_ioq_config_on_listener_restart/1,
-                fun t_update_ioq2_config_on_listener_restart/1
+                ?TDEF_FE(t_restart_config_listener),
+                ?TDEF_FE(t_update_ioq_config),
+                ?TDEF_FE(t_update_ioq2_config),
+                ?TDEF_FE(t_update_ioq_config_on_listener_restart),
+                ?TDEF_FE(t_update_ioq2_config_on_listener_restart)
             ]
         }
 }.
 
 t_restart_config_listener(_) ->
-    ?_test(begin
-        [{_, ConfigMonitor}] = ioq_sup:processes(config_listener_mon),
-        ?assert(is_process_alive(ConfigMonitor)),
-        test_util:stop_sync(ConfigMonitor),
-        ?assertNot(is_process_alive(ConfigMonitor)),
-        NewConfigMonitor = test_util:wait(fun() ->
-            case ioq_sup:processes(config_listener_mon) of
-                [] -> wait;
-                [{_, Pid}] -> Pid
-            end
-        end),
-        ?assert(is_process_alive(NewConfigMonitor))
-    end).
+    [{_, ConfigMonitor}] = ioq_sup:processes(config_listener_mon),
+    ?assert(is_process_alive(ConfigMonitor)),
+    test_util:stop_sync(ConfigMonitor),
+    ?assertNot(is_process_alive(ConfigMonitor)),
+    NewConfigMonitor = test_util:wait(fun() ->
+        case ioq_sup:processes(config_listener_mon) of
+            [] -> wait;
+            [{_, Pid}] -> Pid
+        end
+    end),
+    ?assert(is_process_alive(NewConfigMonitor)).
+
 
 t_update_ioq_config(_) ->
-    ?_test(begin
-        [{_, IoqServer}] = ioq_sup:processes(ioq),
-        gen_server:call(IoqServer, {set_concurrency, 10}),
-        ?assertEqual(10, gen_server:call(IoqServer, get_concurrency)),
-        ?assert(is_process_alive(IoqServer)),
-        config:set("ioq", "concurrency", "200", false),
-        ?assertNotEqual(timeout, test_util:wait(fun() ->
-            case gen_server:call(IoqServer, get_concurrency) of
-                200 -> 200;
-                _ -> wait
-            end
-        end)),
-        ?assert(is_process_alive(IoqServer))
-    end).
+    [{_, IoqServer}] = ioq_sup:processes(ioq),
+    gen_server:call(IoqServer, {set_concurrency, 10}),
+    ?assertEqual(10, gen_server:call(IoqServer, get_concurrency)),
+    ?assert(is_process_alive(IoqServer)),
+    config:set("ioq", "concurrency", "200", false),
+    ?assertNotEqual(timeout, test_util:wait(fun() ->
+        case gen_server:call(IoqServer, get_concurrency) of
+            200 -> 200;
+            _ -> wait
+        end
+    end)),
+    ?assert(is_process_alive(IoqServer)).
 
 t_update_ioq_config_on_listener_restart(_) ->
-    ?_test(begin
-        [{_, IoqServer}] = ioq_sup:processes(ioq),
-        DefaultConcurrency = gen_server:call(IoqServer, get_concurrency),
-        gen_server:call(IoqServer, {set_concurrency, 10}),
-        ?assertEqual(10, gen_server:call(IoqServer, get_concurrency)),
-        ?assert(is_process_alive(IoqServer)),
+    [{_, IoqServer}] = ioq_sup:processes(ioq),
+    DefaultConcurrency = gen_server:call(IoqServer, get_concurrency),
+    gen_server:call(IoqServer, {set_concurrency, 10}),
+    ?assertEqual(10, gen_server:call(IoqServer, get_concurrency)),
+    ?assert(is_process_alive(IoqServer)),
 
-        [{_, ConfigMonitor}] = ioq_sup:processes(config_listener_mon),
-        ?assert(is_process_alive(ConfigMonitor)),
-        test_util:stop_sync(ConfigMonitor),
+    [{_, ConfigMonitor}] = ioq_sup:processes(config_listener_mon),
+    ?assert(is_process_alive(ConfigMonitor)),
+    test_util:stop_sync(ConfigMonitor),
 
-        ?assertNotEqual(timeout, test_util:wait(fun() ->
-            case gen_server:call(IoqServer, get_concurrency) of
-                DefaultConcurrency -> ok;
-                _ -> wait
-            end
-        end)),
-        ?assert(is_process_alive(IoqServer))
-    end).
+    ?assertNotEqual(timeout, test_util:wait(fun() ->
+        case gen_server:call(IoqServer, get_concurrency) of
+            DefaultConcurrency -> ok;
+            _ -> wait
+        end
+    end)),
+    ?assert(is_process_alive(IoqServer)).
 
 t_update_ioq2_config(_) ->
-    ?_test(begin
-        [{_, IoqServer} | _] = ioq_sup:processes(ioq2),
-        gen_server:call(IoqServer, {set_concurrency, 10}),
-        ?assertEqual(10, gen_server:call(IoqServer, get_concurrency)),
-        ?assert(is_process_alive(IoqServer)),
-        config:set("ioq2", "concurrency", "200", false),
-        ?assertNotEqual(timeout, test_util:wait(fun() ->
-            case gen_server:call(IoqServer, get_concurrency) of
-                200 -> 200;
-                _ -> wait
-            end
-        end)),
-        ?assert(is_process_alive(IoqServer))
-    end).
+    [{_, IoqServer} | _] = ioq_sup:processes(ioq2),
+    gen_server:call(IoqServer, {set_concurrency, 10}),
+    ?assertEqual(10, gen_server:call(IoqServer, get_concurrency)),
+    ?assert(is_process_alive(IoqServer)),
+    config:set("ioq2", "concurrency", "200", false),
+    ?assertNotEqual(timeout, test_util:wait(fun() ->
+        case gen_server:call(IoqServer, get_concurrency) of
+            200 -> 200;
+            _ -> wait
+        end
+    end)),
+    ?assert(is_process_alive(IoqServer)).
 
 t_update_ioq2_config_on_listener_restart(_) ->
-    ?_test(begin
-        [{_, IoqServer} | _] = ioq_sup:processes(ioq2),
-        DefaultConcurrency = gen_server:call(IoqServer, get_concurrency),
-        gen_server:call(IoqServer, {set_concurrency, 10}),
-        ?assertEqual(10, gen_server:call(IoqServer, get_concurrency)),
-        ?assert(is_process_alive(IoqServer)),
+    [{_, IoqServer} | _] = ioq_sup:processes(ioq2),
+    DefaultConcurrency = gen_server:call(IoqServer, get_concurrency),
+    gen_server:call(IoqServer, {set_concurrency, 10}),
+    ?assertEqual(10, gen_server:call(IoqServer, get_concurrency)),
+    ?assert(is_process_alive(IoqServer)),
 
-        [{_, ConfigMonitor}] = ioq_sup:processes(config_listener_mon),
-        ?assert(is_process_alive(ConfigMonitor)),
-        test_util:stop_sync(ConfigMonitor),
+    [{_, ConfigMonitor}] = ioq_sup:processes(config_listener_mon),
+    ?assert(is_process_alive(ConfigMonitor)),
+    test_util:stop_sync(ConfigMonitor),
 
-        ?assertNotEqual(timeout, test_util:wait(fun() ->
-            case gen_server:call(IoqServer, get_concurrency) of
-                DefaultConcurrency -> ok;
-                _ -> wait
-            end
-        end)),
-        ?assert(is_process_alive(IoqServer))
-    end).
+    ?assertNotEqual(timeout, test_util:wait(fun() ->
+        case gen_server:call(IoqServer, get_concurrency) of
+            DefaultConcurrency -> ok;
+            _ -> wait
+        end
+    end)),
+    ?assert(is_process_alive(IoqServer)).
 
 priorities_test_() ->
     {ok, ShardP} = ioq_config:build_shard_priorities(?SHARDS_CONFIG),
@@ -167,13 +158,13 @@ priorities_test_() ->
     ).
 
 
-parse_shard_string_test_() ->
+parse_shard_string_test() ->
     Shard = "shards/00000000-1fffffff/foo/pizza_db",
     Classes = ["db_update", "view_update", "view_compact", "db_compact"],
     lists:map(
         fun(Class) ->
             ShardString = Shard ++ "||" ++ Class,
-            ?_assertEqual(
+            ?assertEqual(
                 {list_to_binary(Shard), list_to_existing_atom(Class)},
                 ioq_config:parse_shard_string(ShardString)
             )
@@ -182,9 +173,9 @@ parse_shard_string_test_() ->
     ).
 
 
-parse_bad_string_test_() ->
+parse_bad_string_test() ->
     Shard = "shards/00000000-1fffffff/foo/pizza_db$$$$$ASDF",
-    ?_assertEqual(
+    ?assertEqual(
         {error, Shard},
         ioq_config:parse_shard_string(Shard)
     ).
@@ -219,8 +210,8 @@ config_set_test_() ->
                 meck:unload()
             end,
             [
-                fun check_simple_configs/1,
-                fun check_bypass_configs/1
+                ?TDEF_FE(check_simple_configs),
+                ?TDEF_FE(check_bypass_configs)
             ]
         }
     }.
@@ -250,7 +241,7 @@ check_simple_configs(_) ->
     Reason = "ioq_config_tests",
     %% Custom assert for handling floats as strings
     Assert = fun(Expected0, Value0) ->
-        ?_assertEqual(
+        ?assertEqual(
             ioq_config:to_float(Expected0, Expected0),
             ioq_config:to_float(Value0, Value0)
         )
@@ -258,7 +249,7 @@ check_simple_configs(_) ->
 
     Tests0 = lists:map(fun({Key, Default}) ->
         Value = config:get("ioq2", Key, Default),
-        ?_assertEqual(Default, Value)
+        ?assertEqual(Default, Value)
     end, Defaults),
 
     lists:foldl(fun({Fun, Value, Result}, Acc) ->
@@ -270,9 +261,29 @@ check_simple_configs(_) ->
 
 
 check_bypass_configs(_) ->
+    Shard = <<"shards/00000000-1fffffff/foo/pizza_db">>,
+
+    ?assertNot(ioq:bypass({'$gen_call', fd, foo}, {interactive, Shard})),
+    ?assertNot(ioq:bypass({'$gen_call', fd, foo}, {db_commpact, Shard})),
+
+    % ioq 1
+    ?assertNot(ioq:ioq2_enabled()),
+    config:set("ioq.bypass", "interactive", "true", false),
+    ?assert(ioq:bypass({'$gen_call', fd, foo}, {interactive, Shard})),
+    ?assertNot(ioq:bypass({'$gen_call', fd, foo}, {db_commpact, Shard})),
+
+    % ioq 2
+    config:set("ioq2", "enabled", "true", false),
+    ?assert(ioq:ioq2_enabled()),
     ok = ioq_config:set_bypass(interactive, true, "Bypassing interactive"),
-    Value = config:get_boolean("ioq2.bypass", "interactive", false),
-    ?_assertEqual(true, Value).
+    ?assert(config:get_boolean("ioq2.bypass", "interactive", false)),
+
+    ?assert(ioq:bypass({'$gen_call', fd, foo}, {interactive, Shard})),
+    ?assertNot(ioq:bypass({'$gen_call', fd, foo}, {db_commpact, Shard})),
+
+    config:delete("ioq2", "enabled", false),
+    config:delete("ioq.bypass", "interactive", false),
+    config:delete("ioq2.bypass", "interactive", false).
 
 
 valid_classes_test_() ->
@@ -289,9 +300,9 @@ valid_classes_test_() ->
                 meck:unload()
             end,
             [
-                fun check_default_classes/1,
-                fun check_undeclared_class/1,
-                fun check_declared_class/1
+                ?TDEF_FE(check_default_classes),
+                ?TDEF_FE(check_undeclared_class),
+                ?TDEF_FE(check_declared_class)
             ]
         }
     }.
@@ -299,14 +310,13 @@ valid_classes_test_() ->
 
 check_default_classes(_) ->
     Classes = [C || {C, _P} <- ?DEFAULT_CLASS_PRIORITIES],
-    [?_assert(ioq_config:is_valid_class(C)) || C <- Classes].
+    [?assert(ioq_config:is_valid_class(C)) || C <- Classes].
 
 
 check_undeclared_class(_) ->
-    ?_assert(not ioq_config:is_valid_class(external)).
+    ?assert(not ioq_config:is_valid_class(external)).
 
 
 check_declared_class(_) ->
     config:set(?IOQ2_CLASSES_CONFIG, "search", "1.0", false),
-    ?_assert(ioq_config:is_valid_class(search)).
-
+    ?assert(ioq_config:is_valid_class(search)).
