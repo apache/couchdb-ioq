@@ -18,7 +18,7 @@
     ioq2_enabled/0
 ]).
 -export([get_io_priority/0, set_io_priority/1, maybe_set_io_priority/1]).
-
+-export([bypass/2]).
 -define(APPS, [config, couch_stats, ioq]).
 
 set_io_priority(Priority) ->
@@ -31,6 +31,12 @@ maybe_set_io_priority(Priority) ->
     case get_io_priority() of
         undefined -> set_io_priority(Priority);
         _ -> ok
+    end.
+
+bypass(Msg, Priority) ->
+    case ioq2_enabled() of
+        false -> ioq_server:bypass(Msg, Priority);
+        true  -> ioq_server2:bypass(Msg, Priority)
     end.
 
 start() ->

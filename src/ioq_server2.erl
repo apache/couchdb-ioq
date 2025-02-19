@@ -37,7 +37,8 @@
     get_queue_depths/1,
     get_concurrency/0,
     set_concurrency/1,
-    get_counters/0
+    get_counters/0,
+    bypass/2
 ]).
 
 
@@ -102,25 +103,23 @@ call_search(Fd, Msg, Dimensions) ->
 
 
 call_int(Fd, Msg, Dimensions, IOType) ->
-    Req0 = #ioq_request{
-        fd = Fd,
-        msg = Msg,
-        t0 = os:timestamp()
-    },
-    Req = add_request_dimensions(Req0, Dimensions),
-    Class = atom_to_list(Req#ioq_request.class),
-    case config:get_boolean("ioq2.bypass", Class, false) of
+    case bypass(Msg, Dimensions) of
         true ->
             RW = rw(Msg),
             couch_stats:increment_counter([couchdb, io_queue2, bypassed_count]),
             couch_stats:increment_counter(
                 [couchdb, io_queue2, RW, bypassed_count]),
             gen_server:call(Fd, Msg, infinity);
-        _ ->
+        false ->
+            Req0 = #ioq_request{
+                fd = Fd,
+                msg = Msg,
+                t0 = os:timestamp()
+            },
+            Req = add_request_dimensions(Req0, Dimensions),
             Server = ioq_server(Req, IOType),
             gen_server:call(Server, Req, infinity)
     end.
-
 
 ioq_server(#ioq_request{}, search) ->
     ?IOQ2_SEARCH_SERVER;
@@ -517,6 +516,10 @@ enqueue_request(Req, #state{queue=HQ, waiters=Waiters}=State0) ->
     end,
     State.
 
+bypass(_Msg, {Class, _Shard}) ->
+    config:get_boolean("ioq2.bypass", atom_to_list(Class), false);
+bypass(_Msg, {Class, _Shard0, _GroupId}) ->
+    config:get_boolean("ioq2.bypass", atom_to_list(Class), false).
 
 -spec add_request_dimensions(ioq_request(), io_dimensions()) -> ioq_request().
 add_request_dimensions(Request, {Class, Shard}) ->
