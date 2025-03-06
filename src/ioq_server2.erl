@@ -519,7 +519,9 @@ enqueue_request(Req, #state{queue=HQ, waiters=Waiters}=State0) ->
 bypass(_Msg, {Class, _Shard}) ->
     config:get_boolean("ioq2.bypass", atom_to_list(Class), false);
 bypass(_Msg, {Class, _Shard0, _GroupId}) ->
-    config:get_boolean("ioq2.bypass", atom_to_list(Class), false).
+    config:get_boolean("ioq2.bypass", atom_to_list(Class), false);
+bypass(_Msg, _) ->
+    config:get_boolean("ioq2.bypass", "other", false).
 
 -spec add_request_dimensions(ioq_request(), io_dimensions()) -> ioq_request().
 add_request_dimensions(Request, {Class, Shard}) ->
