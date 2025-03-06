@@ -271,6 +271,13 @@ check_bypass_configs(_) ->
     config:set("ioq.bypass", "interactive", "true", false),
     ?assert(ioq:bypass({'$gen_call', fd, foo}, {interactive, Shard})),
     ?assertNot(ioq:bypass({'$gen_call', fd, foo}, {db_commpact, Shard})),
+    % check other
+    ?assertNot(ioq:bypass({'$gen_call', fd, bar}, undefined)),
+    ?assertNot(ioq:bypass({'$gen_call', fd, bar}, [some, junk, {}])),
+    config:set("ioq.bypass", "other", "true", false),
+    ?assert(ioq:bypass({'$gen_call', fd, bar}, undefined)),
+    ?assert(ioq:bypass({'$gen_call', fd, bar}, [some, junk, {}])),
+    config:delete("ioq.bypass", "other", false),
 
     % ioq 2
     config:set("ioq2", "enabled", "true", false),
@@ -280,6 +287,13 @@ check_bypass_configs(_) ->
 
     ?assert(ioq:bypass({'$gen_call', fd, foo}, {interactive, Shard})),
     ?assertNot(ioq:bypass({'$gen_call', fd, foo}, {db_commpact, Shard})),
+    % check other
+    ?assertNot(ioq:bypass({'$gen_call', fd, bar}, undefined)),
+    ?assertNot(ioq:bypass({'$gen_call', fd, bar}, [some, junk, {}])),
+    config:set("ioq2.bypass", "other", "true", false),
+    ?assert(ioq:bypass({'$gen_call', fd, bar}, undefined)),
+    ?assert(ioq:bypass({'$gen_call', fd, bar}, [some, junk, {}])),
+    config:delete("ioq2.bypass", "other", false),
 
     config:delete("ioq2", "enabled", false),
     config:delete("ioq.bypass", "interactive", false),
