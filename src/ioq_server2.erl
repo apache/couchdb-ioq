@@ -533,9 +533,7 @@ add_request_dimensions(Request, {Class, Shard0, GroupId}) ->
         {db_meta, security} ->
             {undefined, undefined, undefined};
         _ ->
-            Shard1 = filename:rootname(Shard0),
-            {User0, DbName0} = shard_info(Shard1),
-            {Shard1, User0, DbName0}
+            extract_shard_info(Shard0)
     end,
     Request#ioq_request{
         shard = Shard,
@@ -546,6 +544,19 @@ add_request_dimensions(Request, {Class, Shard0, GroupId}) ->
     };
 add_request_dimensions(Request, undefined) ->
     Request#ioq_request{class=other}.
+
+
+extract_shard_info(Shard0) ->
+    case erlang:get({io_priority_cache, Shard0}, undefined) of
+        undefined ->
+            Shard1 = filename:rootname(Shard0),
+            {User, Dbname} = shard_info(Shard1),
+            Info = {Shard1, User, Dbname},
+            erlang:put({io_priority_cache, Shard0}, Info),
+            Info;
+        Info ->
+            Info
+    end.
 
 
 -spec shard_info(dbname()) -> {any(), any()}.
