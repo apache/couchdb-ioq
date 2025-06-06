@@ -547,12 +547,13 @@ add_request_dimensions(Request, undefined) ->
 
 
 extract_shard_info(Shard0) ->
-    case erlang:get({io_priority_cache, Shard0}, undefined) of
+    Key = {io_priority_cache, Shard0},
+    case erlang:get(Key) of
         undefined ->
             Shard1 = filename:rootname(Shard0),
             {User, Dbname} = shard_info(Shard1),
             Info = {Shard1, User, Dbname},
-            erlang:put({io_priority_cache, Shard0}, Info),
+            erlang:put(Key, Info),
             Info;
         Info ->
             Info
