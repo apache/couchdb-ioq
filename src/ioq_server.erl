@@ -78,7 +78,12 @@ call(Fd, Msg, Priority) ->
                 class = Class,
                 t0 = erlang:monotonic_time()
             },
-            gen_server:call(?MODULE, Request, infinity)
+            try
+                gen_server:call(?MODULE, Request, infinity)
+            catch
+                exit:{noproc, _} ->
+                    gen_server:call(Fd, Msg, infinity)
+            end
     end.
 
 bypass(_Msg, Priority) ->
