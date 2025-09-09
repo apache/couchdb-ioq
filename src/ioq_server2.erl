@@ -118,7 +118,12 @@ call_int(Fd, Msg, Dimensions, IOType) ->
             },
             Req = add_request_dimensions(Req0, Dimensions),
             Server = ioq_server(Req, IOType),
-            gen_server:call(Server, Req, infinity)
+            try
+                gen_server:call(Server, Req, infinity)
+            catch
+                exit:{noproc, _} ->
+                    gen_server:call(Fd, Msg, infinity)
+            end
     end.
 
 ioq_server(#ioq_request{}, search) ->
