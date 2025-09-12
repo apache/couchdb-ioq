@@ -152,6 +152,7 @@ pcall(Msg) ->
 
 -spec pcall(any(), non_neg_integer()) -> any().
 pcall(Msg, Timeout) ->
+    io:format("+++ ~p/~p()@~B -> Most ioq2 Timeout is 0.5s: ~p~n", [?MODULE, ?FUNCTION_NAME, ?LINE, Timeout]),
     {MainPid, MainRef} = spawn_monitor(fun() ->
         PidRefs = lists:map(fun(Name) ->
             spawn_monitor(fun() ->

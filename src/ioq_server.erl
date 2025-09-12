@@ -543,6 +543,7 @@ dump_table(#state{counters = Tab} = State) ->
 
 save_to_db() ->
     Timeout = get_interval(),
+    io:format("+++ ~p/~p()@~B -> ioq:stats_interval Timeout: ~p~n", [?MODULE, ?FUNCTION_NAME, ?LINE, Timeout]),
     receive {'ETS-TRANSFER', Tab, _, _} ->
         Dict = ets:foldl(fun table_fold/2, dict:new(), Tab),
         TS = list_to_binary(iso8601_timestamp()),
