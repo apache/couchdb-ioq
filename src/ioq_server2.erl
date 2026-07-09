@@ -51,14 +51,14 @@
 
 
 -record(state, {
-    reqs :: khash:khash(),
-    waiters :: khash:khash(),
+    reqs = #{} :: ioq_requests(),
+    waiters = #{} :: ioq_waiters(),
     queue :: hqueue:hqueue(),
     concurrency = ?DEFAULT_IOQ2_CONCURRENCY :: pos_integer(),
     iterations = 0 :: non_neg_integer(),
-    class_p :: khash:khash(),  %% class priorities
-    user_p :: khash:khash(),   %% user priorities
-    shard_p :: khash:khash(),  %% shard priorities
+    class_p :: ioq_priority_map(),  %% class priorities
+    user_p :: ioq_priority_map(),   %% user priorities
+    shard_p :: ioq_priority_map(),  %% shard priorities
     scale_factor = ?DEFAULT_SCALE_FACTOR :: float(),
     dedupe = true :: boolean(),
     resize_limit = ?DEFAULT_RESIZE_LIMIT :: pos_integer(),
@@ -68,10 +68,10 @@
     max_priority = ?DEFAULT_MAX_PRIORITY :: float()
 }).
 
-
 -type state() :: #state{}.
 -type waiter_key() :: {pid(), integer()} | pos_integer().
--type priority() :: float(). %% should be non_negative_float().
+-type ioq_requests() :: #{reference() => ioq_request()}.
+-type ioq_waiters() :: #{waiter_key() => [gen_server:from()]}.
 
 %% Hacky queue_depth type due to existing fixed element lists for JSON in API
 %% Actual type is:
@@ -198,7 +198,7 @@ get_queue_depths() ->
 
 -spec get_queue_depths([ioq_request()]) -> queue_depths().
 get_queue_depths(Reqs) ->
-    {ok, Users0} = khash:new(),
+    Users0 = #{},
     {Compaction, Replication, Low, Users} = lists:foldl(
         fun
             (#ioq_request{class=db_compact}, {C, R, L, U}) ->
@@ -210,12 +210,7 @@ get_queue_depths(Reqs) ->
             (#ioq_request{class=low}, {C, R, L, U}) ->
                 {C, R, L+1, U};
             (#ioq_request{class=Class, user=User}, {C, R, L, U}) ->
-                [UI0, UDB0, UV0] = case khash:get(U, User) of
-                    undefined ->
-                        [0,0,0];
-                    UC0 ->
-                        UC0
-                end,
+                [UI0, UDB0, UV0] = maps:get(User, U, [0,0,0]),
                 UC = case Class of
                     db_update ->
                         [UI0, UDB0+1, UV0];
@@ -224,8 +219,7 @@ get_queue_depths(Reqs) ->
                     _Interactive ->
                         [UI0+1, UDB0, UV0]
                 end,
-                ok = khash:put(U, User, UC),
-                {C, R, L, U}
+                {C, R, L, maps:put(User, UC, U)}
         end,
         {0, 0, 0, Users0},
         Reqs
@@ -234,7 +228,7 @@ get_queue_depths(Reqs) ->
         {compaction, Compaction},
         {replication, Replication},
         {low, Low},
-        {channels, {khash:to_list(Users)}}
+        {channels, {maps:to_list(Users)}}
     ].
 
 
@@ -272,7 +266,7 @@ get_state() ->
     get_state(?SERVER_ID(1)).
 
 
-%% Returns a mutated #state{} with list representations of khash/hqueue objects
+%% Returns a mutated #state{} with list representations of map/hqueue objects
 -spec get_state(atom()) -> any().
 get_state(Server) ->
     gen_server:call(Server, get_state, infinity).
@@ -293,12 +287,8 @@ start_link(Name, SID, Bind) ->
 
 init([Name, SID]) ->
     {ok, HQ} = hqueue:new(),
-    {ok, Reqs} = khash:new(),
-    {ok, Waiters} = khash:new(),
     State = #state{
         queue = HQ,
-        reqs = Reqs,
-        waiters = Waiters,
         server_name = Name,
         scheduler_id = SID
     },
@@ -307,11 +297,11 @@ init([Name, SID]) ->
 
 handle_call(get_state, _From, State) ->
     Resp = State#state{
-        user_p = khash:to_list(State#state.user_p),
-        class_p = khash:to_list(State#state.class_p),
-        shard_p = khash:to_list(State#state.shard_p),
-        reqs = khash:to_list(State#state.reqs),
-        waiters = khash:to_list(State#state.waiters),
+        user_p = maps:to_list(State#state.user_p),
+        class_p = maps:to_list(State#state.class_p),
+        shard_p = maps:to_list(State#state.shard_p),
+        reqs = maps:to_list(State#state.reqs),
+        waiters = maps:to_list(State#state.waiters),
         queue = hqueue:to_list(State#state.queue)
     },
 
@@ -328,7 +318,7 @@ handle_call(get_concurrency, _From, State) ->
 handle_call({set_concurrency, C}, _From, State) when is_integer(C), C > 0 ->
     {reply, {ok, State#state.concurrency}, State#state{concurrency = C}, 0};
 handle_call(get_reqs, _From, #state{reqs=Reqs}=State) ->
-    {reply, khash:to_list(Reqs), State, 0};
+    {reply, maps:to_list(Reqs), State, 0};
 handle_call(get_pending_reqs, _From, #state{queue=HQ}=State) ->
     {reply, hqueue:to_list(HQ), State, 0};
 handle_call(get_counters, _From, State) ->
@@ -343,31 +333,27 @@ handle_cast(_Msg, State) ->
     {noreply, State, 0}.
 
 
-handle_info({Ref, Reply}, #state{reqs = Reqs} = State) ->
-    case khash:get(Reqs, Ref) of
-        undefined ->
-            ok;
-        #ioq_request{ref=Ref}=Req ->
-            ok = khash:del(Reqs, Ref),
-            TResponse = os:timestamp(),
-            ServiceTime = time_delta(TResponse, Req#ioq_request.tsub),
-            IOWait = time_delta(TResponse, Req#ioq_request.t0),
-            couch_stats:update_histogram(
-                [couchdb, io_queue2, svctm], ServiceTime),
-            couch_stats:update_histogram([couchdb, io_queue2, iowait], IOWait),
-            erlang:demonitor(Ref, [flush]),
-            send_response(State#state.waiters, Req, Reply)
-    end,
+handle_info({Ref, Reply}, #state{reqs = Reqs0} = State0) when is_map_key(Ref, Reqs0) ->
+    {#ioq_request{ref = Ref} = Req, Reqs} = maps:take(Ref, Reqs0),
+    TResponse = os:timestamp(),
+    ServiceTime = time_delta(TResponse, Req#ioq_request.tsub),
+    IOWait = time_delta(TResponse, Req#ioq_request.t0),
+    couch_stats:update_histogram(
+        [couchdb, io_queue2, svctm], ServiceTime),
+    couch_stats:update_histogram([couchdb, io_queue2, iowait], IOWait),
+    erlang:demonitor(Ref, [flush]),
+    State = send_response(State0, Req, Reply),
+    State1 = State#state{reqs = Reqs},
+    {noreply, State1, 0};
+handle_info({_Ref, _Reply}, #state{reqs = #{}} = State) ->
     {noreply, State, 0};
-handle_info({'DOWN', Ref, _, _, Reason}, #state{reqs = Reqs} = State) ->
-    case khash:get(Reqs, Ref) of
-        undefined ->
-            ok;
-        #ioq_request{ref=Ref}=Req ->
-            couch_stats:increment_counter([couchdb, io_queue2, io_errors]),
-            ok = khash:del(Reqs, Ref),
-            send_response(State#state.waiters, Req, {'EXIT', Reason})
-    end,
+handle_info({'DOWN', Ref, _, _, Reason}, #state{reqs = Reqs0} = State0) when is_map_key(Ref, Reqs0) ->
+    {#ioq_request{ref = Ref} = Req, Reqs} = maps:take(Ref, Reqs0),
+    couch_stats:increment_counter([couchdb, io_queue2, io_errors]),
+    State = send_response(State0, Req, {'EXIT', Reason}),
+    State1 = State#state{reqs = Reqs},
+    {noreply, State1, 0};
+handle_info({'DOWN', _Ref, _, _, _Reason}, #state{reqs = #{}} = State) ->
     {noreply, State, 0};
 handle_info(timeout, State) ->
     {noreply, maybe_submit_request(State)};
@@ -421,7 +407,7 @@ update_config_int(State) ->
 
 -spec maybe_submit_request(state()) -> state().
 maybe_submit_request(#state{reqs=Reqs, concurrency=C}=State) ->
-    NumReqs = khash:size(Reqs),
+    NumReqs = maps:size(Reqs),
     case NumReqs < C of
         true ->
             case make_next_request(State) of
@@ -451,14 +437,13 @@ make_next_request(#state{queue=HQ}=State) ->
 submit_request(Req, #state{iterations=I, resize_limit=RL}=State) when I >= RL ->
     ok = hqueue:scale_by(State#state.queue, State#state.scale_factor),
     submit_request(Req, State#state{iterations=0});
-submit_request(Req, #state{iterations=Iterations}=State) ->
+submit_request(Req, #state{iterations=Iterations, reqs=Reqs0}=State) ->
     #ioq_request{
         fd = Fd,
         msg = Call,
         class = Class,
         t0 = T0
     } = Req,
-    #state{reqs = Reqs} = State,
 
     % make the request
     Ref = erlang:monitor(process, Fd),
@@ -472,15 +457,15 @@ submit_request(Req, #state{iterations=Iterations}=State) ->
     couch_stats:increment_counter([couchdb, io_queue2, Class, count]),
     couch_stats:increment_counter([couchdb, io_queue2, RW, count]),
     couch_stats:update_histogram([couchdb, io_queue2, submit_delay], Latency),
-    khash:put(Reqs, Ref, Req#ioq_request{tsub=SubmitTime, ref=Ref}),
-    State#state{iterations=Iterations+1}.
+    Reqs = Reqs0#{Ref => Req#ioq_request{tsub=SubmitTime, ref=Ref}},
+    State#state{iterations = Iterations + 1, reqs = Reqs}.
 
 
--spec send_response(khash:khash(), ioq_request(), term()) -> [ok].
-send_response(Waiters, #ioq_request{key=Key}, Reply) ->
-    Waiting = khash:get(Waiters, Key),
-    khash:del(Waiters, Key),
-    [gen_server:reply(W, Reply) || W <- Waiting].
+-spec send_response(state(), ioq_request(), term()) -> state().
+send_response(#state{waiters = Waiters0} = State0, #ioq_request{key = Key}, Reply) ->
+    {Waiting, Waiters} = maps:take(Key, Waiters0),
+    [gen_server:reply(W, Reply) || W <- Waiting],
+    State0#state{waiters = Waiters}.
 
 
 -spec waiter_key(ioq_request(), state()) -> {waiter_key(), state()}.
@@ -495,7 +480,7 @@ waiter_key(Req, State) ->
 
 
 -spec enqueue_request(ioq_request(), state()) -> state().
-enqueue_request(Req, #state{queue=HQ, waiters=Waiters}=State0) ->
+enqueue_request(Req, #state{queue = HQ} = State0) ->
     #ioq_request{
         from = From,
         msg = Msg
@@ -506,20 +491,21 @@ enqueue_request(Req, #state{queue=HQ, waiters=Waiters}=State0) ->
     couch_stats:increment_counter([couchdb, io_queue2, queued]),
     couch_stats:increment_counter([couchdb, io_queue2, RW, queued]),
 
-    case khash:get(State#state.waiters, ReqKey, not_found) of
-        not_found ->
+    Waiters0 = State#state.waiters,
+    Waiters = case Waiters0 of
+        #{ReqKey := Pids} ->
+            couch_stats:increment_counter([couchdb, io_queue2, merged]),
+            Waiters0#{ReqKey := [From | Pids]};
+        #{} ->
             Priority = prioritize_request(Req, State),
             Req1 = Req#ioq_request{
                 key = ReqKey,
                 init_priority = Priority
             },
             hqueue:insert(HQ, Priority, Req1),
-            khash:put(State#state.waiters, ReqKey, [From]);
-        Pids ->
-            couch_stats:increment_counter([couchdb, io_queue2, merged]),
-            khash:put(Waiters, ReqKey, [From | Pids])
+            Waiters0#{ReqKey => [From]}
     end,
-    State.
+    State#state{waiters = Waiters}.
 
 bypass(_Msg, {Class, _Shard}) ->
     config:get_boolean("ioq2.bypass", atom_to_list(Class), false);
@@ -799,16 +785,21 @@ queue_depths_test_() ->
         {replication, 3},
         {low, 1},
         {channels, {[
-            {<<"foo">>, [3,1,4]},
-            {<<"bar">>, [1,3,1]}
+            {<<"bar">>, [1,3,1]},
+            {<<"foo">>, [3,1,4]}
         ]}}
     ],
+
+    Actual = get_queue_depths(Reqs),
+    {channels, {Channels}} = lists:keyfind(channels, 1, Actual),
+    SortedByUsers = lists:keysort(1, Channels),
+    ActualSorted = lists:keyreplace(channels, 1, Actual, {channels, {SortedByUsers}}),
 
     {
         "Test queue depth stats",
         ?_assertEqual(
             Expected,
-            get_queue_depths(Reqs)
+            ActualSorted
         )
     }.
 
@@ -1095,15 +1086,17 @@ random_server(Servers) ->
     lists:nth(rand:uniform(length(Servers)), Servers).
 
 
-test_io_error(#state{waiters=Waiters, reqs=Reqs}=State) ->
+test_io_error(#state{waiters=Waiters, reqs=Reqs}=State0) ->
     Key = asdf,
     Ref = make_ref(),
     RefTag = make_ref(),
     Req = #ioq_request{ref=Ref, key=Key},
-    khash:put(Waiters, Key, [{self(), RefTag}]),
-    khash:put(Reqs, Ref, Req),
+    State1 = State0#state{
+        waiters = Waiters#{Key => [{self(), RefTag}]},
+        reqs = Reqs#{Ref => Req}
+    },
     Error = {exit, foo},
-    {noreply, _State1, 0} = handle_info({'DOWN', Ref, baz, zab, Error}, State),
+    {noreply, _State2, 0} = handle_info({'DOWN', Ref, baz, zab, Error}, State1),
     Resp = receive
         {RefTag, {'EXIT', Error}} ->
             {ok, Error};

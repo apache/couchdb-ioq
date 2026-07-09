@@ -174,7 +174,7 @@ set_config(Section, Key, Value, Reason) ->
     ok = config:set(Section, Key, Value, Reason).
 
 
--spec build_shard_priorities() -> {ok, khash:khash()}.
+-spec build_shard_priorities() -> {ok, ioq_priority_map()}.
 build_shard_priorities() ->
     Configs = lists:foldl(
         fun({Key0, Val}, Acc) ->
@@ -195,31 +195,30 @@ build_shard_priorities() ->
     build_shard_priorities(Configs).
 
 
--spec build_shard_priorities([{any(), float()}]) -> {ok, khash:khash()}.
+-spec build_shard_priorities([{any(), float()}]) -> {ok, ioq_priority_map()}.
 build_shard_priorities(Configs) ->
     init_config_priorities(Configs).
 
 
--spec build_user_priorities() -> {ok, khash:khash()}.
+-spec build_user_priorities() -> {ok, ioq_priority_map()}.
 build_user_priorities() ->
     build_user_priorities(config:get("ioq2.users")).
 
 
--spec build_user_priorities([{any(), float()}]) -> {ok, khash:khash()}.
+-spec build_user_priorities([{any(), float()}]) -> {ok, ioq_priority_map()}.
 build_user_priorities(Configs0) ->
     Configs = [{list_to_binary(K), to_float(V)} || {K,V} <- Configs0],
     init_config_priorities(Configs).
 
 
--spec build_class_priorities() -> {ok, khash:khash()}.
+-spec build_class_priorities() -> {ok, ioq_priority_map()}.
 build_class_priorities() ->
     build_class_priorities(config:get("ioq2.classes")).
 
 
--spec build_class_priorities([{any(), float()}]) -> {ok, khash:khash()}.
+-spec build_class_priorities([{any(), float()}]) -> {ok, ioq_priority_map()}.
 build_class_priorities(Configs0) ->
-    {ok, ClassP} = khash:new(),
-    ok = add_default_class_priorities(ClassP),
+    ClassP = add_default_class_priorities(#{}),
     Configs = [{list_to_existing_atom(K), to_float(V)} || {K,V} <- Configs0],
     init_config_priorities(Configs, ClassP).
 
@@ -235,14 +234,9 @@ parse_shard_string(ShardString) ->
     end.
 
 
--spec add_default_class_priorities(khash:khash()) -> ok.
+-spec add_default_class_priorities(ioq_priority_map()) -> ioq_priority_map().
 add_default_class_priorities(ClassP) ->
-    ok = lists:foreach(
-        fun({Class, Priority}) ->
-            ok = khash:put(ClassP, Class, Priority)
-        end,
-        ?DEFAULT_CLASS_PRIORITIES
-    ).
+    maps:merge(maps:from_list(?DEFAULT_CLASS_PRIORITIES), ClassP).
 
 
 -spec to_float(any()) -> float().
@@ -269,7 +263,7 @@ to_float(_, Default) ->
     Default.
 
 
--spec prioritize(ioq_request(), khash:khash(), khash:khash(), khash:khash()) ->
+-spec prioritize(ioq_request(), ioq_priority_map(), ioq_priority_map(), ioq_priority_map()) ->
     float().
 prioritize(#ioq_request{} = Req, ClassP, UserP, ShardP) ->
     #ioq_request{
@@ -277,28 +271,20 @@ prioritize(#ioq_request{} = Req, ClassP, UserP, ShardP) ->
         shard=Shard,
         class=Class
     } = Req,
-    UP = get_priority(UserP, User),
-    CP = get_priority(ClassP, Class),
-    SP = get_priority(ShardP, {Shard, Class}),
+    UP = get_priority(User, UserP),
+    CP = get_priority(Class, ClassP),
+    SP = get_priority({Shard, Class}, ShardP),
     UP * CP * SP.
 
 
--spec init_config_priorities([{any(), float()}]) -> {ok, khash:khash()}.
+-spec init_config_priorities([{any(), float()}]) -> {ok, ioq_priority_map()}.
 init_config_priorities(Configs) ->
-    {ok, Hash} = khash:new(),
-    init_config_priorities(Configs, Hash).
+    init_config_priorities(Configs, #{}).
 
-
--spec init_config_priorities([{any(), float()}], khash:khash()) ->
-    {ok, khash:khash()}.
-init_config_priorities(Configs, Hash) ->
-    ok = lists:foreach(
-        fun({Key, Val}) ->
-            ok = khash:put(Hash, Key, Val)
-        end,
-        Configs
-    ),
-    {ok, Hash}.
+-spec init_config_priorities([{any(), float()}], ioq_priority_map()) ->
+    {ok, ioq_priority_map()}.
+init_config_priorities(Configs, Map) ->
+    {ok, maps:merge(Map, maps:from_list(Configs))}.
 
 
 -spec check_priority(atom(), binary(), binary()) -> float().
@@ -317,11 +303,11 @@ check_priority(Class, User, Shard0) ->
     prioritize(Req, ClassP, UserP, ShardP).
 
 
-get_priority(KH, Key) ->
-    get_priority(KH, Key, ?DEFAULT_PRIORITY).
+get_priority(Key, KH) ->
+    get_priority(Key, KH, ?DEFAULT_PRIORITY).
 
 
-get_priority(_KH, undefined, Default) ->
+get_priority(undefined, _KH, Default) ->
     Default;
-get_priority(KH, Key, Default) ->
-    khash:get(KH, Key, Default).
+get_priority(Key, KH, Default) ->
+    maps:get(Key, KH, Default).

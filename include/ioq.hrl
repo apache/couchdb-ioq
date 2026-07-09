@@ -87,4 +87,5 @@
     | {view_io_priority(), dbname(), group_id()}
     | {search, dbname(), group_id()}.
 -type ioq_request() :: #ioq_request{}.
-
+-type priority() :: float(). %% should be non_negative_float().
+-type ioq_priority_map() :: #{any() => priority()}.

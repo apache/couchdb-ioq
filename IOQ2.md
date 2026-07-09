@@ -373,7 +373,7 @@ module and are directly usable for easy testing. You can also see the full list
 of priority values from those priority data structures like so:
 
 ```erlang
-(node1@127.0.0.1)14> khash:to_list(ShardP).
+(node1@127.0.0.1)14> maps:to_list(ShardP).
 [{{<<"shards/00000000-1fffffff/foo">>,interactive},1.0e3},
  {{<<"shards/00000000-1fffffff/foo/pizza_db">>,db_update},
    1.5}]
@@ -472,7 +472,7 @@ ioq_config:set_max_priority(55555.0, "Expand priority space").
 
 Both IOQ1 and IOQ2 have a dedupe feature that will avoid performing the same
 read multiple times in parallel. In IOQ1 this operation scanned through lists
-and could become a considerable resource hog. In IOQ2 this is a simple khash
+and could become a considerable resource hog. In IOQ2 this is a simple map
 lookup and should not be a problem. You should *not* need to ever disable this.
 For whatever reason if you need to, you can do so with:
 
@@ -624,7 +624,7 @@ Afterwards, you'll be able to utilize the setters as expected.
 ## ioq_server2:get_state
 
 You can see a human readable representation of the IOQ2 server state with the
-following block of code. The output is "human readable" in that the khash and
+following block of code. The output is "human readable" in that the map and
 hqueue data structures have been transformed into lists so the contents can be
 viewed. This fetches the state of the `ioq_server_1` pid. If you want a
 different pid you'll need to manually `gen_server:call` into it.
